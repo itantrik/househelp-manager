@@ -39,23 +39,29 @@
 
         function App() {
             // --- STATE ---
-            // Replace this URL after you deploy your Google Apps Script (See instructions)
-            // It will look like: https://script.google.com/macros/s/AKfycbx.../exec
             const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('househelp_api_url') || '');
             
-            const [view, setView] = useState('dashboard'); // dashboard, monthly, weekly, settings
+            const [view, setView] = useState('dashboard'); 
             const [loading, setLoading] = useState(false);
             const [transactions, setTransactions] = useState([]);
+            const [helpers, setHelpers] = useState([]);
             const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-            // Form States
+            // Transaction Form State
             const [formData, setFormData] = useState({
-                type: 'Monthly', // Monthly or Weekly
+                type: 'Monthly',
                 name: '',
-                action: '', // SalaryDue, Payment, WeekWorked
+                action: 'Payment/Advance',
                 amount: '',
                 date: new Date().toISOString().split('T')[0],
                 notes: ''
+            });
+
+            // Helper Registration Form State
+            const [helperForm, setHelperForm] = useState({
+                name: '',
+                type: 'Monthly',
+                defaultAmount: ''
             });
 
             // --- EFFECTS ---
@@ -67,7 +73,7 @@
 
             useEffect(() => {
                 lucide.createIcons();
-            }, [view, transactions]);
+            }, [view, transactions, helpers]);
 
             // --- API ACTIONS ---
             const fetchData = async () => {
@@ -76,7 +82,8 @@
                     const response = await fetch(scriptUrl);
                     const data = await response.json();
                     if (data.status === 'success') {
-                        setTransactions(data.data.reverse()); // Show newest first
+                        setTransactions(data.data.transactions.reverse());
+                        setHelpers(data.data.helpers || []);
                     }
                 } catch (error) {
                     console.error("Error fetching data", error);
@@ -84,85 +91,87 @@
                 setLoading(false);
             };
 
-            const handleSubmit = async (e) => {
+            const handleTransactionSubmit = async (e) => {
                 e.preventDefault();
+                submitData({ ...formData, method: 'add_transaction' });
+            };
+
+            const handleHelperSubmit = async (e) => {
+                e.preventDefault();
+                if (!helperForm.name) { alert("Name is required"); return; }
+                await submitData({ 
+                    method: 'add_helper',
+                    name: helperForm.name,
+                    type: helperForm.type,
+                    defaultAmount: helperForm.defaultAmount
+                });
+                setHelperForm({ name: '', type: 'Monthly', defaultAmount: '' }); // Reset
+                setView('helpers');
+            };
+
+            const submitData = async (payloadObj) => {
                 if (!scriptUrl) {
                     alert("Please set your Google Script URL in Settings first!");
-                    setView('settings');
                     return;
                 }
-
                 setLoading(true);
-                
-                // Construct payload
-                // Basic validation
-                if(!formData.name || !formData.amount) {
-                    alert("Name and Amount are required");
-                    setLoading(false);
-                    return;
-                }
-
                 try {
-                    // We use no-cors mode for GScript submission usually, but here we try standard POST
-                    // Note: Google Apps Script needs to handle POST correctly.
-                    const payload = new URLSearchParams(formData);
-                    
-                    const response = await fetch(scriptUrl, {
-                        method: 'POST',
-                        body: payload
-                    });
-                    
-                    // Reset form and refresh
-                    setFormData({ ...formData, amount: '', notes: '' });
+                    const payload = new URLSearchParams(payloadObj);
+                    await fetch(scriptUrl, { method: 'POST', body: payload });
                     setRefreshTrigger(prev => prev + 1);
-                    alert("Entry added successfully!");
+                    alert("Saved successfully!");
+                    if(payloadObj.method === 'add_transaction') {
+                        // Reset transaction form amount but keep date
+                        setFormData(prev => ({ ...prev, amount: '', notes: '' }));
+                    }
                 } catch (error) {
                     console.error("Error submitting", error);
-                    alert("Submission sent (if no error shown). Refreshing...");
+                    alert("Submission sent. Refreshing...");
                     setRefreshTrigger(prev => prev + 1);
                 }
                 setLoading(false);
             };
 
+            // --- HANDLERS ---
+            const handleHelperSelect = (e) => {
+                const selectedName = e.target.value;
+                const selectedHelper = helpers.find(h => h.name === selectedName);
+                
+                if (selectedHelper) {
+                    setFormData(prev => ({
+                        ...prev,
+                        name: selectedName,
+                        type: selectedHelper.type,
+                        // Auto-set amount if appropriate (optional feature)
+                        amount: selectedHelper.amount ? selectedHelper.amount : prev.amount
+                    }));
+                } else {
+                    setFormData(prev => ({ ...prev, name: selectedName }));
+                }
+            };
+
             // --- CALCULATIONS ---
             const getMonthlyStats = () => {
                 const monthlyData = transactions.filter(t => t.type === 'Monthly');
-                // Calculate balance: (Salary Due) - (Payments/Advances)
                 const salaryDue = monthlyData
                     .filter(t => t.action === 'Salary Due')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
-                
+                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
                 const paid = monthlyData
                     .filter(t => t.action === 'Payment/Advance')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
-
-                return {
-                    balance: salaryDue - paid, // Positive means you owe them, Negative means they have advance
-                    totalPaid: paid
-                };
+                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                return { balance: salaryDue - paid, totalPaid: paid };
             };
 
             const getWeeklyStats = () => {
                 const weeklyData = transactions.filter(t => t.type === 'Weekly');
-                
-                // Weeks worked vs Paid
-                // Assuming amount entered for 'Week Worked' is the value of that week
                 const valueOfWork = weeklyData
                     .filter(t => t.action === 'Work Logged')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
-                
-                const weeksCount = weeklyData
-                    .filter(t => t.action === 'Work Logged')
-                    .length;
-
+                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                const weeksCount = weeklyData.filter(t => t.action === 'Work Logged').length;
                 const paid = weeklyData
                     .filter(t => t.action === 'Payment')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
-
-                return {
-                    balance: valueOfWork - paid,
-                    weeksWorked: weeksCount
-                };
+                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                return { balance: valueOfWork - paid, weeksWorked: weeksCount };
             };
 
             const mStats = getMonthlyStats();
@@ -171,124 +180,110 @@
             // --- RENDERERS ---
             const renderDashboard = () => (
                 <div className="space-y-4">
-                    {/* Monthly Card */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="text-gray-500 text-sm font-medium">Monthly Helper</h3>
-                                <p className="text-xs text-gray-400">Regular Salary Basis</p>
+                    {/* Action Grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 col-span-2">
+                             <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <h3 className="text-gray-500 text-sm font-medium">Monthly Balance</h3>
+                                </div>
+                                <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                                    <i data-lucide="wallet"></i>
+                                </div>
                             </div>
-                            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                                <i data-lucide="calendar"></i>
+                            <div className="mb-1">
+                                <span className="text-3xl font-bold text-gray-800">
+                                    {mStats.balance < 0 ? `+${Math.abs(mStats.balance)}` : `-${mStats.balance}`}
+                                </span>
+                            </div>
+                            <div className={`text-xs font-medium ${mStats.balance < 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {mStats.balance < 0 ? "You gave an advance" : "Amount to be paid"}
                             </div>
                         </div>
-                        <div className="mb-2">
-                            <span className="text-3xl font-bold text-gray-800">
-                                {mStats.balance < 0 ? `+${Math.abs(mStats.balance)}` : `-${mStats.balance}`}
-                            </span>
-                            <span className="text-sm ml-2 text-gray-500">Net Balance</span>
+
+                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-gray-500 text-xs font-medium">Weekly Due</h3>
+                            <div className="text-xl font-bold text-gray-800 mt-1">{wStats.balance}</div>
+                            <div className="text-xs text-gray-400 mt-1">{wStats.weeksWorked} wks logged</div>
                         </div>
-                        <div className={`text-sm font-medium ${mStats.balance < 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {mStats.balance < 0 
-                                ? "You gave an advance" 
-                                : "Amount to be paid"}
-                        </div>
-                        <button onClick={() => { setView('add_monthly'); setFormData({...formData, type: 'Monthly', name: 'Maid', action: 'Payment/Advance'})}} className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                            Add Entry
+                        
+                         <button onClick={() => setView('helpers')} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition">
+                            <div className="p-2 bg-green-100 rounded-full text-green-700"><i data-lucide="users" size={18}></i></div>
+                            <span className="text-xs font-bold text-gray-700">Manage Helpers</span>
                         </button>
                     </div>
 
-                    {/* Weekly Card */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="text-gray-500 text-sm font-medium">Weekly Helper</h3>
-                                <p className="text-xs text-gray-400">Pay per week</p>
-                            </div>
-                            <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-                                <i data-lucide="clock"></i>
-                            </div>
-                        </div>
-                        <div className="mb-2">
-                            <span className="text-3xl font-bold text-gray-800">
-                                {wStats.balance}
-                            </span>
-                            <span className="text-sm ml-2 text-gray-500">Pending Payout</span>
-                        </div>
-                        <div className="text-sm text-gray-500">
-                            Total Weeks Logged: <span className="font-bold">{wStats.weeksWorked}</span>
-                        </div>
-                        <button onClick={() => { setView('add_weekly'); setFormData({...formData, type: 'Weekly', name: 'Gardener', action: 'Work Logged'})}} className="mt-4 w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                            Add Entry
-                        </button>
-                    </div>
+                    <button onClick={() => { setView('add_transaction'); setFormData({...formData, name: '', amount: ''})}} className="w-full py-4 bg-gray-900 text-white rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center gap-2">
+                        <i data-lucide="plus-circle"></i> Add Transaction
+                    </button>
 
-                    {/* History */}
+                    {/* Recent History */}
                      <div className="bg-white p-4 rounded-xl shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Transactions</h3>
+                        <div className="flex justify-between items-center mb-4">
+                             <h3 className="text-lg font-bold text-gray-800">Recent</h3>
+                             <button onClick={() => setView('history')} className="text-xs text-blue-600">View All</button>
+                        </div>
                         <div className="space-y-3">
                             {loading && <div className="flex justify-center p-4"><div className="spinner"></div></div>}
-                            {!loading && transactions.length === 0 && <p className="text-gray-400 text-center">No records found.</p>}
+                            {!loading && transactions.length === 0 && <p className="text-gray-400 text-center text-sm">No records found.</p>}
                             {transactions.slice(0, 5).map((t, idx) => (
                                 <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                                     <div>
-                                        <p className="font-medium text-gray-800">{t.name} ({t.type})</p>
-                                        <p className="text-xs text-gray-500">{new Date(t.date).toLocaleDateString()} - {t.action}</p>
+                                        <p className="font-bold text-gray-800 text-sm">{t.name}</p>
+                                        <p className="text-xs text-gray-500">{new Date(t.date).toLocaleDateString()} • {t.action}</p>
                                     </div>
-                                    <div className={`font-bold ${t.action.includes('Payment') || t.action.includes('Advance') ? 'text-green-600' : 'text-gray-800'}`}>
+                                    <div className={`font-mono text-sm font-bold ${t.action.includes('Payment') || t.action.includes('Advance') ? 'text-green-600' : 'text-red-600'}`}>
                                         {t.amount}
                                     </div>
                                 </div>
                             ))}
                         </div>
-                         <button onClick={() => setView('history')} className="w-full mt-4 text-center text-sm text-gray-500 hover:text-gray-800">View All History</button>
                     </div>
                 </div>
             );
 
-            const renderForm = () => {
-                const isMonthly = view === 'add_monthly';
+            const renderTransactionForm = () => {
                 return (
                     <div className="bg-white p-6 rounded-xl shadow-sm">
                         <div className="flex items-center mb-6">
                             <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500">
                                 <i data-lucide="arrow-left"></i>
                             </button>
-                            <h2 className="text-xl font-bold">
-                                {isMonthly ? 'Monthly Helper Entry' : 'Weekly Helper Entry'}
-                            </h2>
+                            <h2 className="text-xl font-bold">New Transaction</h2>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleTransactionSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Helper Name</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={formData.name}
-                                    onChange={e => setFormData({...formData, name: e.target.value})}
-                                    placeholder="e.g. Sangeeta"
-                                />
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Helper</label>
+                                <div className="relative">
+                                    <select 
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none"
+                                        value={formData.name}
+                                        onChange={handleHelperSelect}
+                                    >
+                                        <option value="">-- Choose Helper --</option>
+                                        {helpers.map((h, i) => <option key={i} value={h.name}>{h.name} ({h.type})</option>)}
+                                    </select>
+                                    <div className="absolute right-3 top-3 pointer-events-none text-gray-500"><i data-lucide="chevron-down" size={16}></i></div>
+                                </div>
+                                {helpers.length === 0 && <p className="text-xs text-red-500 mt-1">No helpers found. Go to Dashboard > Manage Helpers first.</p>}
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                <input 
-                                    type="date" 
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={formData.date}
-                                    onChange={e => setFormData({...formData, date: e.target.value})}
-                                />
-                            </div>
+                            {/* Show Type (Read Only) */}
+                            {formData.name && (
+                                <div className="flex gap-2">
+                                     <span className="text-xs font-bold px-2 py-1 bg-gray-100 rounded text-gray-600">Type: {formData.type}</span>
+                                </div>
+                            )}
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Action Type</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
                                 <select 
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                     value={formData.action}
                                     onChange={e => setFormData({...formData, action: e.target.value})}
                                 >
-                                    {isMonthly ? (
+                                    {formData.type === 'Monthly' ? (
                                         <>
                                             <option value="Payment/Advance">Payment / Advance Given</option>
                                             <option value="Salary Due">Salary Due (Add to debt)</option>
@@ -306,37 +301,107 @@
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                                 <input 
                                     type="number" 
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={formData.amount}
                                     onChange={e => setFormData({...formData, amount: e.target.value})}
-                                    placeholder="e.g. 5000"
+                                    placeholder="0.00"
                                 />
-                                {view === 'add_weekly' && formData.action === 'Work Logged' && (
-                                    <p className="text-xs text-gray-500 mt-1">Enter the value of 1 week of work.</p>
-                                )}
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                <input 
+                                    type="date" 
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={formData.date}
+                                    onChange={e => setFormData({...formData, date: e.target.value})}
+                                />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                                 <input 
                                     type="text" 
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={formData.notes}
                                     onChange={e => setFormData({...formData, notes: e.target.value})}
+                                    placeholder="Optional"
                                 />
                             </div>
 
                             <button 
                                 type="submit" 
                                 disabled={loading}
-                                className={`w-full py-3 text-white rounded-lg font-medium transition ${loading ? 'bg-gray-400' : (isMonthly ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700')}`}
+                                className={`w-full py-4 text-white rounded-xl font-bold shadow-md transition ${loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
                             >
-                                {loading ? 'Saving...' : 'Save Entry'}
+                                {loading ? 'Saving...' : 'Save Transaction'}
                             </button>
                         </form>
                     </div>
                 );
             };
+
+            const renderHelpersManager = () => (
+                <div className="space-y-4">
+                    <div className="bg-white p-6 rounded-xl shadow-sm">
+                        <div className="flex items-center mb-6">
+                            <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500">
+                                <i data-lucide="arrow-left"></i>
+                            </button>
+                            <h2 className="text-xl font-bold">Manage Helpers</h2>
+                        </div>
+                        
+                        {/* Add Helper Form */}
+                        <form onSubmit={handleHelperSubmit} className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                            <h3 className="font-bold text-gray-700 mb-3 text-sm">Register / Update Helper</h3>
+                            <div className="space-y-3">
+                                <input 
+                                    type="text" placeholder="Name (e.g. Sangeeta)" 
+                                    className="w-full p-2 border rounded"
+                                    value={helperForm.name}
+                                    onChange={e => setHelperForm({...helperForm, name: e.target.value})}
+                                />
+                                <div className="flex gap-2">
+                                    <select 
+                                        className="w-1/2 p-2 border rounded bg-white"
+                                        value={helperForm.type}
+                                        onChange={e => setHelperForm({...helperForm, type: e.target.value})}
+                                    >
+                                        <option value="Monthly">Monthly</option>
+                                        <option value="Weekly">Weekly</option>
+                                    </select>
+                                    <input 
+                                        type="number" placeholder="Default Amount" 
+                                        className="w-1/2 p-2 border rounded"
+                                        value={helperForm.defaultAmount}
+                                        onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})}
+                                    />
+                                </div>
+                                <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded font-medium hover:bg-green-700">
+                                    {loading ? 'Saving...' : 'Save Helper'}
+                                </button>
+                            </div>
+                        </form>
+
+                        {/* List Helpers */}
+                        <h3 className="font-bold text-gray-700 mb-3 text-sm">Registered Helpers</h3>
+                        <div className="space-y-2">
+                             {helpers.length === 0 && <p className="text-gray-400 text-sm">No helpers registered yet.</p>}
+                             {helpers.map((h, i) => (
+                                 <div key={i} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded shadow-sm">
+                                    <div>
+                                        <div className="font-bold text-gray-800">{h.name}</div>
+                                        <div className="text-xs text-gray-500">{h.type} {h.amount ? `• ${h.amount}` : ''}</div>
+                                    </div>
+                                    <button onClick={() => setHelperForm({name: h.name, type: h.type, defaultAmount: h.amount})} className="text-blue-600 text-xs">
+                                        Edit
+                                    </button>
+                                 </div>
+                             ))}
+                        </div>
+                    </div>
+                </div>
+            );
 
             const renderHistory = () => (
                 <div className="bg-white p-4 rounded-xl shadow-sm h-full">
@@ -352,7 +417,6 @@
                                 <tr className="bg-gray-50 border-b">
                                     <th className="p-3">Date</th>
                                     <th className="p-3">Name</th>
-                                    <th className="p-3">Type</th>
                                     <th className="p-3">Action</th>
                                     <th className="p-3 text-right">Amount</th>
                                 </tr>
@@ -362,7 +426,6 @@
                                     <tr key={idx} className="border-b hover:bg-gray-50">
                                         <td className="p-3">{new Date(t.date).toLocaleDateString()}</td>
                                         <td className="p-3">{t.name}</td>
-                                        <td className="p-3"><span className={`px-2 py-1 rounded text-xs ${t.type === 'Monthly' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{t.type}</span></td>
                                         <td className="p-3">{t.action}</td>
                                         <td className="p-3 text-right font-mono">{t.amount}</td>
                                     </tr>
@@ -383,7 +446,7 @@
                     </div>
                     <div className="space-y-4">
                         <div className="p-4 bg-yellow-50 text-yellow-800 rounded-lg text-sm mb-4">
-                            <strong>Setup Required:</strong> You need to create a Google Sheet and deploy a Script. Paste the Web App URL below.
+                            <strong>Update Required:</strong> You must update your Google Script and add a 'Helpers' sheet for the new features to work.
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Google Script Web App URL</label>
@@ -392,7 +455,6 @@
                                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                                 value={scriptUrl}
                                 onChange={e => setScriptUrl(e.target.value)}
-                                placeholder="https://script.google.com/macros/s/..."
                             />
                         </div>
                         <button 
@@ -427,7 +489,8 @@
                     {/* Content */}
                     <main className="flex-1 p-4">
                         {view === 'dashboard' && renderDashboard()}
-                        {(view === 'add_monthly' || view === 'add_weekly') && renderForm()}
+                        {view === 'add_transaction' && renderTransactionForm()}
+                        {view === 'helpers' && renderHelpersManager()}
                         {view === 'history' && renderHistory()}
                         {view === 'settings' && renderSettings()}
                     </main>
