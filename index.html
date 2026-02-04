@@ -151,7 +151,7 @@
                         ...prev,
                         name: selectedName,
                         type: selectedHelper.type,
-                        amount: selectedHelper.amount ? selectedHelper.amount : prev.amount
+                        amount: selectedHelper.amount || '' // Auto-fill default amount
                     }));
                 } else {
                     setFormData(prev => ({ ...prev, name: selectedName }));
@@ -321,7 +321,7 @@
                                     <div className="mt-3 flex gap-2">
                                          <button 
                                             onClick={() => { 
-                                                setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: '' }); 
+                                                setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '' }); 
                                                 setView('add_transaction'); 
                                             }}
                                             className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700"
@@ -459,11 +459,20 @@
                                 <option value="Weekly">Weekly</option>
                             </select>
                             <input 
-                                type="number" placeholder="Default Rate" className="w-1/2 p-2 border rounded"
+                                type="number" placeholder="Current Salary" className="w-1/2 p-2 border rounded"
                                 value={helperForm.defaultAmount} onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})}
                             />
                         </div>
-                        <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded font-medium">Save Helper</button>
+
+                        {/* NEW: Explanatory text */}
+                        <p className="text-[10px] text-gray-500 bg-blue-50 p-2 rounded border border-blue-100">
+                            <i className="inline-block mr-1">ℹ️</i> 
+                            Updating the rate here only affects <strong>new</strong> future transactions. Past records will remain unchanged.
+                        </p>
+
+                        <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded font-medium">
+                            {helpers.find(h => h.name === helperForm.name) ? 'Update Helper' : 'Save New Helper'}
+                        </button>
                     </form>
 
                     <div className="space-y-2">
