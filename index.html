@@ -157,6 +157,8 @@
             // UI State
             const [expandedHelpers, setExpandedHelpers] = useState({}); // Stores which cards are expanded
             const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); // History Filters
+            const [historyPage, setHistoryPage] = useState(1); // Pagination
+            const ITEMS_PER_PAGE = 20;
             
             // Dashboard Date State
             const [dashboardDate, setDashboardDate] = useState(new Date());
@@ -186,11 +188,16 @@
 
             useEffect(() => {
                 lucide.createIcons();
-            }, [view, transactions, helpers, dashboardDate, expandedHelpers]);
+            }, [view, transactions, helpers, dashboardDate, expandedHelpers, historyPage]);
 
             useEffect(() => {
                 setSuccessMsg('');
             }, [view]);
+
+            // Reset page on filter change
+            useEffect(() => {
+                setHistoryPage(1);
+            }, [historyFilters]);
 
             // --- API ACTIONS ---
             const fetchData = async () => {
@@ -199,7 +206,9 @@
                     const response = await fetch(WEB_APP_URL);
                     const data = await response.json();
                     if (data.status === 'success') {
-                        setTransactions(data.data.transactions.reverse());
+                        // Sort by date descending (Newest date first)
+                        const sortedTx = data.data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+                        setTransactions(sortedTx);
                         setHelpers(data.data.helpers || []);
                     }
                 } catch (error) {
@@ -631,6 +640,11 @@
                     return matchName && matchAction;
                 });
 
+                // Pagination Logic
+                const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
+                const startIndex = (historyPage - 1) * ITEMS_PER_PAGE;
+                const currentData = filteredTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
                 return (
                     <div className="bg-white p-4 rounded-xl shadow-sm h-full">
                          <div className="flex flex-col mb-4">
@@ -671,12 +685,12 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredTransactions.length === 0 && (
+                                    {currentData.length === 0 && (
                                         <tr>
                                             <td colSpan="4" className="p-4 text-center text-gray-400">No records match filters.</td>
                                         </tr>
                                     )}
-                                    {filteredTransactions.map((t, idx) => (
+                                    {currentData.map((t, idx) => (
                                         <tr key={idx} className="border-b hover:bg-gray-50">
                                             <td className="p-3 whitespace-nowrap">
                                                 {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
@@ -689,6 +703,29 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Pagination Controls */}
+                        {filteredTransactions.length > ITEMS_PER_PAGE && (
+                            <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
+                                <button 
+                                    onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                    disabled={historyPage === 1}
+                                    className={`px-3 py-1 rounded text-sm font-medium ${historyPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-xs text-gray-500 font-medium">
+                                    Page {historyPage} of {totalPages}
+                                </span>
+                                <button 
+                                    onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={historyPage === totalPages}
+                                    className={`px-3 py-1 rounded text-sm font-medium ${historyPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 );
             };
