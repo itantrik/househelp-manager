@@ -154,6 +154,9 @@
             const [refreshTrigger, setRefreshTrigger] = useState(0);
             const [successMsg, setSuccessMsg] = useState('');
             
+            // UI State
+            const [expandedHelpers, setExpandedHelpers] = useState({}); // Stores which cards are expanded
+            
             // Dashboard Date State
             const [dashboardDate, setDashboardDate] = useState(new Date());
 
@@ -182,7 +185,7 @@
 
             useEffect(() => {
                 lucide.createIcons();
-            }, [view, transactions, helpers, dashboardDate]);
+            }, [view, transactions, helpers, dashboardDate, expandedHelpers]);
 
             useEffect(() => {
                 setSuccessMsg('');
@@ -261,6 +264,13 @@
                 } else {
                     setFormData(prev => ({ ...prev, name: selectedName }));
                 }
+            };
+
+            const toggleHelper = (name) => {
+                setExpandedHelpers(prev => ({
+                    ...prev,
+                    [name]: !prev[name]
+                }));
             };
 
             // --- CALCULATIONS FOR DASHBOARD ---
@@ -353,57 +363,78 @@
                                 </div>
                             )}
 
-                            {helperStats.map((h, i) => (
-                                <div key={i} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div>
-                                            <h3 className="font-bold text-lg text-gray-800">{h.name}</h3>
-                                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{h.type}</span>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                                                {h.overallBalance > 0 ? `-${h.overallBalance}` : `+${Math.abs(h.overallBalance)}`}
+                            {helperStats.map((h, i) => {
+                                const isExpanded = !!expandedHelpers[h.name];
+                                return (
+                                    <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                        {/* Header - Clickable to toggle */}
+                                        <div 
+                                            className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-50 transition-colors"
+                                            onClick={() => toggleHelper(h.name)}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                 <div className={`mt-1 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                                                    <i data-lucide="chevron-down" size={20}></i>
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-lg text-gray-800">{h.name}</h3>
+                                                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{h.type}</span>
+                                                </div>
                                             </div>
-                                            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Net Balance (Total)</div>
+                                            <div className="text-right">
+                                                <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                                    {h.overallBalance > 0 ? `-${h.overallBalance}` : `+${Math.abs(h.overallBalance)}`}
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 uppercase tracking-wide">Net Balance</div>
+                                            </div>
                                         </div>
+                                        
+                                        {/* Body - Conditionally Rendered */}
+                                        {isExpanded && (
+                                            <div className="px-5 pb-5 pt-0 border-t border-gray-50 animate-fade-in-down">
+                                                <div className="h-4"></div> {/* Spacer */}
+                                                
+                                                {/* Monthly Progress */}
+                                                <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm mb-3">
+                                                    <div>
+                                                        <div className="text-gray-500 text-xs">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
+                                                        <div className="font-semibold">{h.monthDue}</div>
+                                                    </div>
+                                                    <div className="text-gray-300">|</div>
+                                                    <div className="text-right">
+                                                        <div className="text-gray-500 text-xs">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
+                                                        <div className="font-semibold text-green-600">{h.monthPaid}</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Action Shortcuts */}
+                                                <div className="flex gap-2">
+                                                     <button 
+                                                        onClick={(e) => { 
+                                                            e.stopPropagation(); 
+                                                            setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '' }); 
+                                                            setView('add_transaction'); 
+                                                        }}
+                                                        className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700"
+                                                    >
+                                                        Pay
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => { 
+                                                            e.stopPropagation(); 
+                                                            setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '' }); 
+                                                            setView('add_transaction'); 
+                                                        }}
+                                                        className="flex-1 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200"
+                                                    >
+                                                        {h.type === 'Monthly' ? 'Add Due' : 'Log Work'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    
-                                    {/* Monthly Progress */}
-                                    <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
-                                        <div>
-                                            <div className="text-gray-500 text-xs">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
-                                            <div className="font-semibold">{h.monthDue}</div>
-                                        </div>
-                                        <div className="text-gray-300">|</div>
-                                        <div className="text-right">
-                                            <div className="text-gray-500 text-xs">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
-                                            <div className="font-semibold text-green-600">{h.monthPaid}</div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Action Shortcuts */}
-                                    <div className="mt-3 flex gap-2">
-                                         <button 
-                                            onClick={() => { 
-                                                setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '' }); 
-                                                setView('add_transaction'); 
-                                            }}
-                                            className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700"
-                                        >
-                                            Pay
-                                        </button>
-                                        <button 
-                                            onClick={() => { 
-                                                setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '' }); 
-                                                setView('add_transaction'); 
-                                            }}
-                                            className="flex-1 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200"
-                                        >
-                                            {h.type === 'Monthly' ? 'Add Due' : 'Log Work'}
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Lifetime Stats Widget */}
