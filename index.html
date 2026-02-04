@@ -50,6 +50,9 @@
             const [transactions, setTransactions] = useState([]);
             const [helpers, setHelpers] = useState([]);
             const [refreshTrigger, setRefreshTrigger] = useState(0);
+            
+            // Dashboard Date State
+            const [dashboardDate, setDashboardDate] = useState(new Date());
 
             // Transaction Form
             const [formData, setFormData] = useState({
@@ -79,7 +82,7 @@
 
             useEffect(() => {
                 lucide.createIcons();
-            }, [view, transactions, helpers]);
+            }, [view, transactions, helpers, dashboardDate]);
 
             // --- API ACTIONS ---
             const fetchData = async () => {
@@ -152,19 +155,27 @@
                 }
             };
 
+            const changeMonth = (offset) => {
+                setDashboardDate(prev => {
+                    const newDate = new Date(prev);
+                    newDate.setMonth(prev.getMonth() + offset);
+                    return newDate;
+                });
+            };
+
             // --- CALCULATIONS FOR DASHBOARD ---
             const helperStats = useMemo(() => {
-                const currentMonth = new Date().getMonth();
-                const currentYear = new Date().getFullYear();
+                const selectedMonth = dashboardDate.getMonth();
+                const selectedYear = dashboardDate.getFullYear();
 
                 return helpers.map(helper => {
                     // Filter transactions for this specific helper
                     const myTx = transactions.filter(t => t.name === helper.name);
                     
-                    // Filter for Current Month
+                    // Filter for Selected Month
                     const thisMonthTx = myTx.filter(t => {
                         const d = new Date(t.date);
-                        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+                        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
                     });
 
                     let due = 0;
@@ -190,7 +201,7 @@
                             .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
                     }
 
-                    // Calculate Total Outstanding (All time)
+                    // Calculate Total Outstanding (All time - not affected by date filter)
                     const totalDue = myTx
                         .filter(t => t.action === 'Salary Due' || t.action === 'Work Logged')
                         .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
@@ -203,16 +214,15 @@
                         ...helper,
                         monthDue: due,
                         monthPaid: paid,
-                        monthBalance: due - paid, // Positive = You owe them, Negative = They have advance
+                        monthBalance: due - paid, 
                         overallBalance: totalDue - totalPaid,
                         totalPaidAllTime: totalPaid
                     };
                 });
-            }, [helpers, transactions]);
+            }, [helpers, transactions, dashboardDate]);
 
             // --- RENDERERS ---
             const renderDashboard = () => {
-                const monthName = new Date().toLocaleString('default', { month: 'long' });
                 const grandTotalPaid = helperStats.reduce((acc, curr) => acc + curr.totalPaidAllTime, 0);
 
                 return (
@@ -223,9 +233,21 @@
                             </div>
                         )}
 
-                        <div className="flex justify-between items-end mb-2">
+                        <div className="flex justify-between items-center mb-2">
                             <h2 className="text-xl font-bold text-gray-800">Dashboard</h2>
-                            <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{monthName}</span>
+                            
+                            {/* Date Navigation */}
+                            <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm p-1 border border-gray-200">
+                                <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-100 rounded text-gray-600">
+                                    <i data-lucide="chevron-left" size={20}></i>
+                                </button>
+                                <span className="text-sm font-bold text-blue-600 min-w-[110px] text-center select-none">
+                                    {dashboardDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                </span>
+                                <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-100 rounded text-gray-600">
+                                    <i data-lucide="chevron-right" size={20}></i>
+                                </button>
+                            </div>
                         </div>
 
                         {/* Lifetime Stats Widget */}
@@ -270,19 +292,19 @@
                                             <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
                                                 {h.overallBalance > 0 ? `-${h.overallBalance}` : `+${Math.abs(h.overallBalance)}`}
                                             </div>
-                                            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Net Balance</div>
+                                            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Net Balance (Total)</div>
                                         </div>
                                     </div>
                                     
                                     {/* Monthly Progress */}
                                     <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
                                         <div>
-                                            <div className="text-gray-500 text-xs">This Month Due</div>
+                                            <div className="text-gray-500 text-xs">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
                                             <div className="font-semibold">{h.monthDue}</div>
                                         </div>
                                         <div className="text-gray-300">|</div>
                                         <div className="text-right">
-                                            <div className="text-gray-500 text-xs">Paid This Month</div>
+                                            <div className="text-gray-500 text-xs">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
                                             <div className="font-semibold text-green-600">{h.monthPaid}</div>
                                         </div>
                                     </div>
