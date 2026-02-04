@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"> <!-- Prevents crawling -->
     <title>HouseHelp Manager</title>
     
     <!-- React & ReactDOM -->
@@ -35,19 +36,22 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        // --- CONFIGURATION ---
+        // PASTE YOUR GOOGLE SCRIPT WEB APP URL INSIDE THE QUOTES BELOW
+        const WEB_APP_URL = ""; 
+        // Example: "https://script.google.com/macros/s/AKfycbx.../exec"
+
+        const { useState, useEffect, useMemo } = React;
 
         function App() {
             // --- STATE ---
-            const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('househelp_api_url') || '');
-            
             const [view, setView] = useState('dashboard'); 
             const [loading, setLoading] = useState(false);
             const [transactions, setTransactions] = useState([]);
             const [helpers, setHelpers] = useState([]);
             const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-            // Transaction Form State
+            // Transaction Form
             const [formData, setFormData] = useState({
                 type: 'Monthly',
                 name: '',
@@ -57,7 +61,7 @@
                 notes: ''
             });
 
-            // Helper Registration Form State
+            // Helper Form
             const [helperForm, setHelperForm] = useState({
                 name: '',
                 type: 'Monthly',
@@ -66,10 +70,12 @@
 
             // --- EFFECTS ---
             useEffect(() => {
-                if (scriptUrl) {
-                    fetchData();
+                if (!WEB_APP_URL) {
+                    // Friendly warning if URL is missing
+                    return;
                 }
-            }, [scriptUrl, refreshTrigger]);
+                fetchData();
+            }, [refreshTrigger]);
 
             useEffect(() => {
                 lucide.createIcons();
@@ -79,7 +85,7 @@
             const fetchData = async () => {
                 setLoading(true);
                 try {
-                    const response = await fetch(scriptUrl);
+                    const response = await fetch(WEB_APP_URL);
                     const data = await response.json();
                     if (data.status === 'success') {
                         setTransactions(data.data.transactions.reverse());
@@ -91,37 +97,18 @@
                 setLoading(false);
             };
 
-            const handleTransactionSubmit = async (e) => {
-                e.preventDefault();
-                submitData({ ...formData, method: 'add_transaction' });
-            };
-
-            const handleHelperSubmit = async (e) => {
-                e.preventDefault();
-                if (!helperForm.name) { alert("Name is required"); return; }
-                await submitData({ 
-                    method: 'add_helper',
-                    name: helperForm.name,
-                    type: helperForm.type,
-                    defaultAmount: helperForm.defaultAmount
-                });
-                setHelperForm({ name: '', type: 'Monthly', defaultAmount: '' }); // Reset
-                setView('helpers');
-            };
-
             const submitData = async (payloadObj) => {
-                if (!scriptUrl) {
-                    alert("Please set your Google Script URL in Settings first!");
+                if (!WEB_APP_URL) {
+                    alert("Please configure the WEB_APP_URL in the code first.");
                     return;
                 }
                 setLoading(true);
                 try {
                     const payload = new URLSearchParams(payloadObj);
-                    await fetch(scriptUrl, { method: 'POST', body: payload });
+                    await fetch(WEB_APP_URL, { method: 'POST', body: payload });
                     setRefreshTrigger(prev => prev + 1);
                     alert("Saved successfully!");
                     if(payloadObj.method === 'add_transaction') {
-                        // Reset transaction form amount but keep date
                         setFormData(prev => ({ ...prev, amount: '', notes: '' }));
                     }
                 } catch (error) {
@@ -132,17 +119,32 @@
                 setLoading(false);
             };
 
-            // --- HANDLERS ---
+            const handleTransactionSubmit = (e) => {
+                e.preventDefault();
+                submitData({ ...formData, method: 'add_transaction' });
+            };
+
+            const handleHelperSubmit = (e) => {
+                e.preventDefault();
+                if (!helperForm.name) { alert("Name is required"); return; }
+                submitData({ 
+                    method: 'add_helper',
+                    name: helperForm.name,
+                    type: helperForm.type,
+                    defaultAmount: helperForm.defaultAmount
+                });
+                setHelperForm({ name: '', type: 'Monthly', defaultAmount: '' });
+                setView('helpers');
+            };
+
             const handleHelperSelect = (e) => {
                 const selectedName = e.target.value;
                 const selectedHelper = helpers.find(h => h.name === selectedName);
-                
                 if (selectedHelper) {
                     setFormData(prev => ({
                         ...prev,
                         name: selectedName,
                         type: selectedHelper.type,
-                        // Auto-set amount if appropriate (optional feature)
                         amount: selectedHelper.amount ? selectedHelper.amount : prev.amount
                     }));
                 } else {
@@ -150,255 +152,300 @@
                 }
             };
 
-            // --- CALCULATIONS ---
-            const getMonthlyStats = () => {
-                const monthlyData = transactions.filter(t => t.type === 'Monthly');
-                const salaryDue = monthlyData
-                    .filter(t => t.action === 'Salary Due')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
-                const paid = monthlyData
-                    .filter(t => t.action === 'Payment/Advance')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
-                return { balance: salaryDue - paid, totalPaid: paid };
-            };
+            // --- CALCULATIONS FOR DASHBOARD ---
+            const helperStats = useMemo(() => {
+                const currentMonth = new Date().getMonth();
+                const currentYear = new Date().getFullYear();
 
-            const getWeeklyStats = () => {
-                const weeklyData = transactions.filter(t => t.type === 'Weekly');
-                const valueOfWork = weeklyData
-                    .filter(t => t.action === 'Work Logged')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
-                const weeksCount = weeklyData.filter(t => t.action === 'Work Logged').length;
-                const paid = weeklyData
-                    .filter(t => t.action === 'Payment')
-                    .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
-                return { balance: valueOfWork - paid, weeksWorked: weeksCount };
-            };
+                return helpers.map(helper => {
+                    // Filter transactions for this specific helper
+                    const myTx = transactions.filter(t => t.name === helper.name);
+                    
+                    // Filter for Current Month
+                    const thisMonthTx = myTx.filter(t => {
+                        const d = new Date(t.date);
+                        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+                    });
 
-            const mStats = getMonthlyStats();
-            const wStats = getWeeklyStats();
+                    let due = 0;
+                    let paid = 0;
+
+                    if (helper.type === 'Monthly') {
+                        // For Monthly: Sum "Salary Due" for due, "Payment/Advance" for paid
+                        due = thisMonthTx
+                            .filter(t => t.action === 'Salary Due')
+                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                        
+                        paid = thisMonthTx
+                            .filter(t => t.action === 'Payment/Advance')
+                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                    } else {
+                        // For Weekly: Sum "Work Logged" for due, "Payment" for paid
+                        due = thisMonthTx
+                            .filter(t => t.action === 'Work Logged')
+                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                        
+                        paid = thisMonthTx
+                            .filter(t => t.action === 'Payment')
+                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                    }
+
+                    // Calculate Total Outstanding (All time)
+                    const totalDue = myTx
+                        .filter(t => t.action === 'Salary Due' || t.action === 'Work Logged')
+                        .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                    
+                    const totalPaid = myTx
+                        .filter(t => t.action === 'Payment/Advance' || t.action === 'Payment')
+                        .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+
+                    return {
+                        ...helper,
+                        monthDue: due,
+                        monthPaid: paid,
+                        monthBalance: due - paid, // Positive = You owe them, Negative = They have advance
+                        overallBalance: totalDue - totalPaid,
+                        totalPaidAllTime: totalPaid
+                    };
+                });
+            }, [helpers, transactions]);
 
             // --- RENDERERS ---
-            const renderDashboard = () => (
-                <div className="space-y-4">
-                    {/* Action Grid */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 col-span-2">
-                             <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <h3 className="text-gray-500 text-sm font-medium">Monthly Balance</h3>
+            const renderDashboard = () => {
+                const monthName = new Date().toLocaleString('default', { month: 'long' });
+                const grandTotalPaid = helperStats.reduce((acc, curr) => acc + curr.totalPaidAllTime, 0);
+
+                return (
+                    <div className="space-y-4">
+                        {!WEB_APP_URL && (
+                             <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-red-700 text-sm mb-4">
+                                <strong>Configuration Needed:</strong> Open the index.html file in a text editor and paste your Google Script URL into the <code>WEB_APP_URL</code> variable at the top.
+                            </div>
+                        )}
+
+                        <div className="flex justify-between items-end mb-2">
+                            <h2 className="text-xl font-bold text-gray-800">Dashboard</h2>
+                            <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{monthName}</span>
+                        </div>
+
+                        {/* Lifetime Stats Widget */}
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 rounded-xl shadow-lg text-white mb-6">
+                            <h3 className="text-blue-100 text-sm font-medium mb-1">Total Paid (Lifetime)</h3>
+                            <div className="text-3xl font-bold mb-4">
+                                {grandTotalPaid.toLocaleString()}
+                            </div>
+                            
+                            {helperStats.length > 0 && (
+                                <div className="space-y-2 pt-3 border-t border-blue-500/30">
+                                    <h4 className="text-[10px] font-bold text-blue-200 uppercase tracking-wide">Breakdown by Helper</h4>
+                                    {helperStats.map((h, i) => (
+                                        <div key={i} className="flex justify-between items-center text-sm">
+                                            <span>{h.name}</span>
+                                            <span className="font-mono font-medium opacity-90">{h.totalPaidAllTime.toLocaleString()}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                                    <i data-lucide="wallet"></i>
-                                </div>
-                            </div>
-                            <div className="mb-1">
-                                <span className="text-3xl font-bold text-gray-800">
-                                    {mStats.balance < 0 ? `+${Math.abs(mStats.balance)}` : `-${mStats.balance}`}
-                                </span>
-                            </div>
-                            <div className={`text-xs font-medium ${mStats.balance < 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                {mStats.balance < 0 ? "You gave an advance" : "Amount to be paid"}
-                            </div>
+                            )}
                         </div>
 
-                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                            <h3 className="text-gray-500 text-xs font-medium">Weekly Due</h3>
-                            <div className="text-xl font-bold text-gray-800 mt-1">{wStats.balance}</div>
-                            <div className="text-xs text-gray-400 mt-1">{wStats.weeksWorked} wks logged</div>
-                        </div>
-                        
-                         <button onClick={() => setView('helpers')} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition">
-                            <div className="p-2 bg-green-100 rounded-full text-green-700"><i data-lucide="users" size={18}></i></div>
-                            <span className="text-xs font-bold text-gray-700">Manage Helpers</span>
-                        </button>
-                    </div>
-
-                    <button onClick={() => { setView('add_transaction'); setFormData({...formData, name: '', amount: ''})}} className="w-full py-4 bg-gray-900 text-white rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center gap-2">
-                        <i data-lucide="plus-circle"></i> Add Transaction
-                    </button>
-
-                    {/* Recent History */}
-                     <div className="bg-white p-4 rounded-xl shadow-sm">
-                        <div className="flex justify-between items-center mb-4">
-                             <h3 className="text-lg font-bold text-gray-800">Recent</h3>
-                             <button onClick={() => setView('history')} className="text-xs text-blue-600">View All</button>
-                        </div>
+                        {/* Helper Cards */}
                         <div className="space-y-3">
                             {loading && <div className="flex justify-center p-4"><div className="spinner"></div></div>}
-                            {!loading && transactions.length === 0 && <p className="text-gray-400 text-center text-sm">No records found.</p>}
-                            {transactions.slice(0, 5).map((t, idx) => (
-                                <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                    <div>
-                                        <p className="font-bold text-gray-800 text-sm">{t.name}</p>
-                                        <p className="text-xs text-gray-500">{new Date(t.date).toLocaleDateString()} • {t.action}</p>
+                            
+                            {!loading && helpers.length === 0 && (
+                                <div className="text-center p-6 bg-white rounded-xl border border-dashed border-gray-300">
+                                    <p className="text-gray-500 mb-2">No helpers added yet.</p>
+                                    <button onClick={() => setView('helpers')} className="text-blue-600 font-bold">Add your first helper</button>
+                                </div>
+                            )}
+
+                            {helperStats.map((h, i) => (
+                                <div key={i} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h3 className="font-bold text-lg text-gray-800">{h.name}</h3>
+                                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{h.type}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                                {h.overallBalance > 0 ? `-${h.overallBalance}` : `+${Math.abs(h.overallBalance)}`}
+                                            </div>
+                                            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Net Balance</div>
+                                        </div>
                                     </div>
-                                    <div className={`font-mono text-sm font-bold ${t.action.includes('Payment') || t.action.includes('Advance') ? 'text-green-600' : 'text-red-600'}`}>
-                                        {t.amount}
+                                    
+                                    {/* Monthly Progress */}
+                                    <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
+                                        <div>
+                                            <div className="text-gray-500 text-xs">This Month Due</div>
+                                            <div className="font-semibold">{h.monthDue}</div>
+                                        </div>
+                                        <div className="text-gray-300">|</div>
+                                        <div className="text-right">
+                                            <div className="text-gray-500 text-xs">Paid This Month</div>
+                                            <div className="font-semibold text-green-600">{h.monthPaid}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Action Shortcuts */}
+                                    <div className="mt-3 flex gap-2">
+                                         <button 
+                                            onClick={() => { 
+                                                setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: '' }); 
+                                                setView('add_transaction'); 
+                                            }}
+                                            className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700"
+                                        >
+                                            Pay
+                                        </button>
+                                        <button 
+                                            onClick={() => { 
+                                                setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '' }); 
+                                                setView('add_transaction'); 
+                                            }}
+                                            className="flex-1 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200"
+                                        >
+                                            {h.type === 'Monthly' ? 'Add Due' : 'Log Work'}
+                                        </button>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                </div>
-            );
 
-            const renderTransactionForm = () => {
-                return (
-                    <div className="bg-white p-6 rounded-xl shadow-sm">
-                        <div className="flex items-center mb-6">
-                            <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500">
-                                <i data-lucide="arrow-left"></i>
+                        {/* Quick Nav */}
+                         <div className="grid grid-cols-2 gap-3 mt-4">
+                             <button onClick={() => setView('helpers')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700">
+                                <i data-lucide="users" size={16}></i> Manage Helpers
                             </button>
-                            <h2 className="text-xl font-bold">New Transaction</h2>
+                             <button onClick={() => setView('history')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700">
+                                <i data-lucide="history" size={16}></i> View History
+                            </button>
                         </div>
-
-                        <form onSubmit={handleTransactionSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Helper</label>
-                                <div className="relative">
-                                    <select 
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none"
-                                        value={formData.name}
-                                        onChange={handleHelperSelect}
-                                    >
-                                        <option value="">-- Choose Helper --</option>
-                                        {helpers.map((h, i) => <option key={i} value={h.name}>{h.name} ({h.type})</option>)}
-                                    </select>
-                                    <div className="absolute right-3 top-3 pointer-events-none text-gray-500"><i data-lucide="chevron-down" size={16}></i></div>
-                                </div>
-                                {helpers.length === 0 && <p className="text-xs text-red-500 mt-1">No helpers found. Go to Dashboard > Manage Helpers first.</p>}
-                            </div>
-
-                            {/* Show Type (Read Only) */}
-                            {formData.name && (
-                                <div className="flex gap-2">
-                                     <span className="text-xs font-bold px-2 py-1 bg-gray-100 rounded text-gray-600">Type: {formData.type}</span>
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
-                                <select 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                    value={formData.action}
-                                    onChange={e => setFormData({...formData, action: e.target.value})}
-                                >
-                                    {formData.type === 'Monthly' ? (
-                                        <>
-                                            <option value="Payment/Advance">Payment / Advance Given</option>
-                                            <option value="Salary Due">Salary Due (Add to debt)</option>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <option value="Work Logged">Work Logged (One Week)</option>
-                                            <option value="Payment">Payment Made</option>
-                                        </>
-                                    )}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                                <input 
-                                    type="number" 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={formData.amount}
-                                    onChange={e => setFormData({...formData, amount: e.target.value})}
-                                    placeholder="0.00"
-                                />
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                <input 
-                                    type="date" 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={formData.date}
-                                    onChange={e => setFormData({...formData, date: e.target.value})}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={formData.notes}
-                                    onChange={e => setFormData({...formData, notes: e.target.value})}
-                                    placeholder="Optional"
-                                />
-                            </div>
-
-                            <button 
-                                type="submit" 
-                                disabled={loading}
-                                className={`w-full py-4 text-white rounded-xl font-bold shadow-md transition ${loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
-                            >
-                                {loading ? 'Saving...' : 'Save Transaction'}
-                            </button>
-                        </form>
                     </div>
                 );
             };
 
-            const renderHelpersManager = () => (
-                <div className="space-y-4">
-                    <div className="bg-white p-6 rounded-xl shadow-sm">
-                        <div className="flex items-center mb-6">
-                            <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500">
-                                <i data-lucide="arrow-left"></i>
-                            </button>
-                            <h2 className="text-xl font-bold">Manage Helpers</h2>
+            const renderTransactionForm = () => (
+                <div className="bg-white p-6 rounded-xl shadow-sm">
+                    <div className="flex items-center mb-6">
+                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
+                        <h2 className="text-xl font-bold">Transaction</h2>
+                    </div>
+
+                    <form onSubmit={handleTransactionSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Helper</label>
+                            <div className="relative">
+                                <select 
+                                    className="w-full p-3 border border-gray-300 rounded-lg bg-white"
+                                    value={formData.name}
+                                    onChange={handleHelperSelect}
+                                >
+                                    <option value="">-- Select --</option>
+                                    {helpers.map((h, i) => <option key={i} value={h.name}>{h.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                            <select 
+                                className="w-full p-3 border border-gray-300 rounded-lg bg-white"
+                                value={formData.action}
+                                onChange={e => setFormData({...formData, action: e.target.value})}
+                            >
+                                {formData.type === 'Monthly' ? (
+                                    <>
+                                        <option value="Payment/Advance">Payment / Advance</option>
+                                        <option value="Salary Due">Salary Due</option>
+                                    </>
+                                ) : (
+                                    <>
+                                        <option value="Work Logged">Log Work Week</option>
+                                        <option value="Payment">Payment</option>
+                                    </>
+                                )}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                            <input 
+                                type="number" 
+                                className="w-full p-3 border border-gray-300 rounded-lg"
+                                value={formData.amount}
+                                onChange={e => setFormData({...formData, amount: e.target.value})}
+                                placeholder="0.00"
+                            />
                         </div>
                         
-                        {/* Add Helper Form */}
-                        <form onSubmit={handleHelperSubmit} className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-                            <h3 className="font-bold text-gray-700 mb-3 text-sm">Register / Update Helper</h3>
-                            <div className="space-y-3">
-                                <input 
-                                    type="text" placeholder="Name (e.g. Sangeeta)" 
-                                    className="w-full p-2 border rounded"
-                                    value={helperForm.name}
-                                    onChange={e => setHelperForm({...helperForm, name: e.target.value})}
-                                />
-                                <div className="flex gap-2">
-                                    <select 
-                                        className="w-1/2 p-2 border rounded bg-white"
-                                        value={helperForm.type}
-                                        onChange={e => setHelperForm({...helperForm, type: e.target.value})}
-                                    >
-                                        <option value="Monthly">Monthly</option>
-                                        <option value="Weekly">Weekly</option>
-                                    </select>
-                                    <input 
-                                        type="number" placeholder="Default Amount" 
-                                        className="w-1/2 p-2 border rounded"
-                                        value={helperForm.defaultAmount}
-                                        onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})}
-                                    />
-                                </div>
-                                <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded font-medium hover:bg-green-700">
-                                    {loading ? 'Saving...' : 'Save Helper'}
-                                </button>
-                            </div>
-                        </form>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                            <input 
+                                type="date" 
+                                className="w-full p-3 border border-gray-300 rounded-lg"
+                                value={formData.date}
+                                onChange={e => setFormData({...formData, date: e.target.value})}
+                            />
+                            <p className="text-xs text-gray-400 mt-1">You can select past dates.</p>
+                        </div>
 
-                        {/* List Helpers */}
-                        <h3 className="font-bold text-gray-700 mb-3 text-sm">Registered Helpers</h3>
-                        <div className="space-y-2">
-                             {helpers.length === 0 && <p className="text-gray-400 text-sm">No helpers registered yet.</p>}
-                             {helpers.map((h, i) => (
-                                 <div key={i} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded shadow-sm">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                            <input 
+                                type="text" 
+                                className="w-full p-3 border border-gray-300 rounded-lg"
+                                value={formData.notes}
+                                onChange={e => setFormData({...formData, notes: e.target.value})}
+                                placeholder="Optional"
+                            />
+                        </div>
+
+                        <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">
+                            {loading ? 'Saving...' : 'Save'}
+                        </button>
+                    </form>
+                </div>
+            );
+
+            const renderHelpersManager = () => (
+                <div className="bg-white p-6 rounded-xl shadow-sm">
+                    <div className="flex items-center mb-6">
+                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
+                        <h2 className="text-xl font-bold">Manage Helpers</h2>
+                    </div>
+                    
+                    <form onSubmit={handleHelperSubmit} className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 space-y-3">
+                        <input 
+                            type="text" placeholder="Name" className="w-full p-2 border rounded"
+                            value={helperForm.name} onChange={e => setHelperForm({...helperForm, name: e.target.value})}
+                        />
+                        <div className="flex gap-2">
+                            <select 
+                                className="w-1/2 p-2 border rounded bg-white"
+                                value={helperForm.type} onChange={e => setHelperForm({...helperForm, type: e.target.value})}
+                            >
+                                <option value="Monthly">Monthly</option>
+                                <option value="Weekly">Weekly</option>
+                            </select>
+                            <input 
+                                type="number" placeholder="Default Rate" className="w-1/2 p-2 border rounded"
+                                value={helperForm.defaultAmount} onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})}
+                            />
+                        </div>
+                        <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded font-medium">Save Helper</button>
+                    </form>
+
+                    <div className="space-y-2">
+                            {helpers.map((h, i) => (
+                                <div key={i} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded shadow-sm">
                                     <div>
                                         <div className="font-bold text-gray-800">{h.name}</div>
-                                        <div className="text-xs text-gray-500">{h.type} {h.amount ? `• ${h.amount}` : ''}</div>
+                                        <div className="text-xs text-gray-500">{h.type} • {h.amount || 0}</div>
                                     </div>
-                                    <button onClick={() => setHelperForm({name: h.name, type: h.type, defaultAmount: h.amount})} className="text-blue-600 text-xs">
-                                        Edit
-                                    </button>
-                                 </div>
-                             ))}
-                        </div>
+                                    <button onClick={() => setHelperForm({name: h.name, type: h.type, defaultAmount: h.amount})} className="text-blue-600 text-xs">Edit</button>
+                                </div>
+                            ))}
                     </div>
                 </div>
             );
@@ -406,10 +453,8 @@
             const renderHistory = () => (
                 <div className="bg-white p-4 rounded-xl shadow-sm h-full">
                      <div className="flex items-center mb-6">
-                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500">
-                            <i data-lucide="arrow-left"></i>
-                        </button>
-                        <h2 className="text-xl font-bold">Full History</h2>
+                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
+                        <h2 className="text-xl font-bold">History</h2>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-left text-sm">
@@ -436,63 +481,19 @@
                 </div>
             );
 
-            const renderSettings = () => (
-                <div className="bg-white p-6 rounded-xl shadow-sm">
-                    <div className="flex items-center mb-6">
-                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500">
-                            <i data-lucide="arrow-left"></i>
-                        </button>
-                        <h2 className="text-xl font-bold">Settings</h2>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="p-4 bg-yellow-50 text-yellow-800 rounded-lg text-sm mb-4">
-                            <strong>Update Required:</strong> You must update your Google Script and add a 'Helpers' sheet for the new features to work.
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Google Script Web App URL</label>
-                            <input 
-                                type="text" 
-                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                value={scriptUrl}
-                                onChange={e => setScriptUrl(e.target.value)}
-                            />
-                        </div>
-                        <button 
-                            onClick={() => {
-                                localStorage.setItem('househelp_api_url', scriptUrl);
-                                alert('URL Saved!');
-                                setView('dashboard');
-                                setRefreshTrigger(prev => prev + 1);
-                            }}
-                            className="w-full py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
-                        >
-                            Save Configuration
-                        </button>
-                    </div>
-                </div>
-            );
-
-            // --- MAIN RENDER SWITCH ---
+            // --- MAIN SWITCH ---
             return (
                 <div className="max-w-md mx-auto min-h-screen flex flex-col">
-                    {/* Header */}
-                    <header className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
+                    <header className="bg-white p-4 shadow-sm sticky top-0 z-10">
                         <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <i data-lucide="home" className="text-blue-600"></i>
-                            HouseHelp
+                            <i data-lucide="home" className="text-blue-600"></i> HouseHelp
                         </h1>
-                        <button onClick={() => setView('settings')} className="text-gray-500 hover:text-blue-600">
-                            <i data-lucide="settings"></i>
-                        </button>
                     </header>
-
-                    {/* Content */}
                     <main className="flex-1 p-4">
                         {view === 'dashboard' && renderDashboard()}
                         {view === 'add_transaction' && renderTransactionForm()}
                         {view === 'helpers' && renderHelpersManager()}
                         {view === 'history' && renderHistory()}
-                        {view === 'settings' && renderSettings()}
                     </main>
                 </div>
             );
