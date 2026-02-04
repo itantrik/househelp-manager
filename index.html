@@ -33,6 +33,8 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -73,7 +75,7 @@
             }, [salary, stdDays, stdHours, otDays, otHours]);
 
             return (
-                <div className="bg-white p-6 rounded-xl shadow-sm">
+                <div className="bg-white p-6 rounded-xl shadow-sm fade-in">
                     {/* Header */}
                     <div className="flex items-center mb-6">
                         <button onClick={onBack} className="mr-3 text-gray-500 hover:text-blue-600 transition">
@@ -144,20 +146,65 @@
             );
         }
 
+        // --- SUB-COMPONENT: LOGIN SCREEN ---
+        function LoginScreen({ onUnlock }) {
+            const [pin, setPin] = useState('');
+            const [error, setError] = useState(false);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const success = onUnlock(pin);
+                if (!success) {
+                    setError(true);
+                    setPin('');
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
+                        <div className="mb-6 inline-block p-4 bg-blue-50 rounded-full text-blue-600">
+                            <i data-lucide="lock" size={32}></i>
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome Back</h2>
+                        <p className="text-gray-500 mb-6 text-sm">Please enter your access PIN to continue.</p>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <input 
+                                type="password" 
+                                value={pin}
+                                onChange={e => { setPin(e.target.value); setError(false); }}
+                                className={`w-full p-3 text-center text-lg tracking-widest border rounded-xl outline-none focus:ring-2 ${error ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-200'}`}
+                                placeholder="• • • •"
+                                autoFocus
+                            />
+                            <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 transition">
+                                Unlock App
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
         // --- MAIN APP COMPONENT ---
         function App() {
             // --- STATE ---
             const [view, setView] = useState('dashboard'); 
-            const [loading, setLoading] = useState(false);
+            const [loading, setLoading] = useState(true); // Start loading true to fetch/auth check
             const [transactions, setTransactions] = useState([]);
             const [helpers, setHelpers] = useState([]);
             const [refreshTrigger, setRefreshTrigger] = useState(0);
             const [successMsg, setSuccessMsg] = useState('');
             
+            // Authentication State
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [authPassword, setAuthPassword] = useState(null); // Stores the password from DB
+            
             // UI State
-            const [expandedHelpers, setExpandedHelpers] = useState({}); // Stores which cards are expanded
-            const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); // History Filters
-            const [historyPage, setHistoryPage] = useState(1); // Pagination
+            const [expandedHelpers, setExpandedHelpers] = useState({}); 
+            const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); 
+            const [historyPage, setHistoryPage] = useState(1); 
             const ITEMS_PER_PAGE = 20;
             
             // Dashboard Date State
@@ -187,34 +234,78 @@
             }, [refreshTrigger]);
 
             useEffect(() => {
+                // Initialize icons whenever DOM changes significantly
                 lucide.createIcons();
-            }, [view, transactions, helpers, dashboardDate, expandedHelpers, historyPage]);
+            }, [view, transactions, helpers, dashboardDate, expandedHelpers, historyPage, isAuthenticated]);
 
             useEffect(() => {
                 setSuccessMsg('');
             }, [view]);
 
-            // Reset page on filter change
             useEffect(() => {
                 setHistoryPage(1);
             }, [historyFilters]);
 
-            // --- API ACTIONS ---
+            // --- API ACTIONS & AUTH LOGIC ---
             const fetchData = async () => {
                 setLoading(true);
                 try {
                     const response = await fetch(WEB_APP_URL);
                     const data = await response.json();
                     if (data.status === 'success') {
-                        // Sort by date descending (Newest date first)
+                        // 1. Process Transactions
                         const sortedTx = data.data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
                         setTransactions(sortedTx);
-                        setHelpers(data.data.helpers || []);
+                        
+                        // 2. Process Helpers & Authentication
+                        const allHelpers = data.data.helpers || [];
+                        
+                        // Check for special admin helper
+                        const adminHelper = allHelpers.find(h => h.name === '__ADMIN__');
+                        const realHelpers = allHelpers.filter(h => h.name !== '__ADMIN__');
+                        
+                        setHelpers(realHelpers);
+
+                        // Auth Logic
+                        if (adminHelper && adminHelper.amount) {
+                            setAuthPassword(adminHelper.amount.toString()); // Store password
+                            checkSession(adminHelper.amount.toString());
+                        } else {
+                            // No admin setup, allow access
+                            setIsAuthenticated(true);
+                        }
                     }
                 } catch (error) {
                     console.error("Error fetching data", error);
                 }
                 setLoading(false);
+            };
+
+            const checkSession = (password) => {
+                const session = JSON.parse(localStorage.getItem('househelp_auth_session'));
+                if (session && session.token === password) {
+                    const now = new Date().getTime();
+                    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+                    if (now - session.timestamp < thirtyDays) {
+                        setIsAuthenticated(true);
+                        return;
+                    }
+                }
+                setIsAuthenticated(false);
+            };
+
+            const handleUnlock = (inputPin) => {
+                if (inputPin === authPassword) {
+                    // Save session
+                    const session = {
+                        token: authPassword,
+                        timestamp: new Date().getTime()
+                    };
+                    localStorage.setItem('househelp_auth_session', JSON.stringify(session));
+                    setIsAuthenticated(true);
+                    return true;
+                }
+                return false;
             };
 
             const submitData = async (payloadObj) => {
@@ -243,6 +334,7 @@
                 setLoading(false);
             };
 
+            // --- EVENT HANDLERS ---
             const handleTransactionSubmit = (e) => {
                 e.preventDefault();
                 submitData({ ...formData, method: 'add_transaction' });
@@ -283,7 +375,7 @@
                 }));
             };
 
-            // --- CALCULATIONS FOR DASHBOARD ---
+            // --- CALCULATIONS ---
             const helperStats = useMemo(() => {
                 const selectedMonth = dashboardDate.getMonth();
                 const selectedYear = dashboardDate.getFullYear();
@@ -345,7 +437,7 @@
                 };
 
                 return (
-                    <div className="space-y-4">
+                    <div className="space-y-4 fade-in">
                         {!WEB_APP_URL && (
                              <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-red-700 text-sm mb-4">
                                 <strong>Configuration Needed:</strong> Paste your Google Script URL into the code.
@@ -364,8 +456,6 @@
 
                         {/* Helper Cards */}
                         <div className="space-y-3">
-                            {loading && <div className="flex justify-center p-4"><div className="spinner"></div></div>}
-                            
                             {!loading && helpers.length === 0 && (
                                 <div className="text-center p-6 bg-white rounded-xl border border-dashed border-gray-300">
                                     <p className="text-gray-500 mb-2">No helpers added yet.</p>
@@ -485,7 +575,7 @@
             };
 
             const renderTransactionForm = () => (
-                <div className="bg-white p-6 rounded-xl shadow-sm">
+                <div className="bg-white p-6 rounded-xl shadow-sm fade-in">
                     <div className="flex items-center mb-6">
                         <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
                         <h2 className="text-xl font-bold">Transaction</h2>
@@ -573,7 +663,7 @@
             );
 
             const renderHelpersManager = () => (
-                <div className="bg-white p-6 rounded-xl shadow-sm">
+                <div className="bg-white p-6 rounded-xl shadow-sm fade-in">
                     <div className="flex items-center mb-6">
                         <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
                         <h2 className="text-xl font-bold">Manage Helpers</h2>
@@ -646,7 +736,7 @@
                 const currentData = filteredTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
                 return (
-                    <div className="bg-white p-4 rounded-xl shadow-sm h-full">
+                    <div className="bg-white p-4 rounded-xl shadow-sm h-full fade-in">
                          <div className="flex flex-col mb-4">
                             <div className="flex items-center mb-4">
                                 <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
@@ -691,14 +781,23 @@
                                         </tr>
                                     )}
                                     {currentData.map((t, idx) => (
-                                        <tr key={idx} className="border-b hover:bg-gray-50">
-                                            <td className="p-3 whitespace-nowrap">
-                                                {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                                            </td>
-                                            <td className="p-3">{t.name}</td>
-                                            <td className="p-3 text-xs">{t.action}</td>
-                                            <td className="p-3 text-right font-mono">{t.amount}</td>
-                                        </tr>
+                                        <React.Fragment key={idx}>
+                                            <tr className="border-b hover:bg-gray-50">
+                                                <td className="p-3 whitespace-nowrap align-top">
+                                                    {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                                </td>
+                                                <td className="p-3 align-top">
+                                                    <div className="font-medium">{t.name}</div>
+                                                    {t.notes && (
+                                                        <div className="text-[10px] text-gray-500 italic mt-1 leading-tight flex items-start gap-1">
+                                                            <span>•</span> {t.notes}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-xs align-top">{t.action}</td>
+                                                <td className="p-3 text-right font-mono align-top">{t.amount}</td>
+                                            </tr>
+                                        </React.Fragment>
                                     ))}
                                 </tbody>
                             </table>
@@ -729,6 +828,19 @@
                     </div>
                 );
             };
+
+            // --- AUTH CHECKER ---
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                        <div className="spinner"></div>
+                    </div>
+                );
+            }
+
+            if (!isAuthenticated) {
+                return <LoginScreen onUnlock={handleUnlock} />;
+            }
 
             // --- MAIN SWITCH ---
             return (
