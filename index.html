@@ -678,7 +678,9 @@
                                     )}
                                     {filteredTransactions.map((t, idx) => (
                                         <tr key={idx} className="border-b hover:bg-gray-50">
-                                            <td className="p-3 whitespace-nowrap">{new Date(t.date).toLocaleDateString()}</td>
+                                            <td className="p-3 whitespace-nowrap">
+                                                {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                            </td>
                                             <td className="p-3">{t.name}</td>
                                             <td className="p-3 text-xs">{t.action}</td>
                                             <td className="p-3 text-right font-mono">{t.amount}</td>
