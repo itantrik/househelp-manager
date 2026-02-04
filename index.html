@@ -342,26 +342,6 @@
                             />
                         </div>
 
-                        {/* Lifetime Stats Widget */}
-                        <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 rounded-xl shadow-lg text-white mb-6">
-                            <h3 className="text-blue-100 text-sm font-medium mb-1">Total Paid (Lifetime)</h3>
-                            <div className="text-3xl font-bold mb-4">
-                                {grandTotalPaid.toLocaleString()}
-                            </div>
-                            
-                            {helperStats.length > 0 && (
-                                <div className="space-y-2 pt-3 border-t border-blue-500/30">
-                                    <h4 className="text-[10px] font-bold text-blue-200 uppercase tracking-wide">Breakdown by Helper</h4>
-                                    {helperStats.map((h, i) => (
-                                        <div key={i} className="flex justify-between items-center text-sm">
-                                            <span>{h.name}</span>
-                                            <span className="font-mono font-medium opacity-90">{h.totalPaidAllTime.toLocaleString()}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
                         {/* Helper Cards */}
                         <div className="space-y-3">
                             {loading && <div className="flex justify-center p-4"><div className="spinner"></div></div>}
@@ -424,6 +404,26 @@
                                     </div>
                                 </div>
                             ))}
+                        </div>
+
+                        {/* Lifetime Stats Widget */}
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 rounded-xl shadow-lg text-white mb-6">
+                            <h3 className="text-blue-100 text-sm font-medium mb-1">Total Paid (Lifetime)</h3>
+                            <div className="text-3xl font-bold mb-4">
+                                {grandTotalPaid.toLocaleString()}
+                            </div>
+                            
+                            {helperStats.length > 0 && (
+                                <div className="space-y-2 pt-3 border-t border-blue-500/30">
+                                    <h4 className="text-[10px] font-bold text-blue-200 uppercase tracking-wide">Breakdown by Helper</h4>
+                                    {helperStats.map((h, i) => (
+                                        <div key={i} className="flex justify-between items-center text-sm">
+                                            <span>{h.name}</span>
+                                            <span className="font-mono font-medium opacity-90">{h.totalPaidAllTime.toLocaleString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Quick Nav */}
