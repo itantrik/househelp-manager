@@ -156,6 +156,7 @@
             
             // UI State
             const [expandedHelpers, setExpandedHelpers] = useState({}); // Stores which cards are expanded
+            const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); // History Filters
             
             // Dashboard Date State
             const [dashboardDate, setDashboardDate] = useState(new Date());
@@ -618,36 +619,77 @@
                 </div>
             );
 
-            const renderHistory = () => (
-                <div className="bg-white p-4 rounded-xl shadow-sm h-full">
-                     <div className="flex items-center mb-6">
-                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
-                        <h2 className="text-xl font-bold">History</h2>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-left text-sm">
-                            <thead>
-                                <tr className="bg-gray-50 border-b">
-                                    <th className="p-3">Date</th>
-                                    <th className="p-3">Name</th>
-                                    <th className="p-3">Action</th>
-                                    <th className="p-3 text-right">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {transactions.map((t, idx) => (
-                                    <tr key={idx} className="border-b hover:bg-gray-50">
-                                        <td className="p-3">{new Date(t.date).toLocaleDateString()}</td>
-                                        <td className="p-3">{t.name}</td>
-                                        <td className="p-3">{t.action}</td>
-                                        <td className="p-3 text-right font-mono">{t.amount}</td>
+            const renderHistory = () => {
+                // Get unique values for dropdowns
+                const uniqueNames = [...new Set(transactions.map(t => t.name))].filter(Boolean).sort();
+                const uniqueActions = [...new Set(transactions.map(t => t.action))].filter(Boolean).sort();
+
+                // Filter Logic
+                const filteredTransactions = transactions.filter(t => {
+                    const matchName = historyFilters.name ? t.name === historyFilters.name : true;
+                    const matchAction = historyFilters.action ? t.action === historyFilters.action : true;
+                    return matchName && matchAction;
+                });
+
+                return (
+                    <div className="bg-white p-4 rounded-xl shadow-sm h-full">
+                         <div className="flex flex-col mb-4">
+                            <div className="flex items-center mb-4">
+                                <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
+                                <h2 className="text-xl font-bold">History</h2>
+                            </div>
+                            
+                            {/* Filters */}
+                            <div className="flex gap-2">
+                                <select 
+                                    className="w-1/2 p-2 border rounded-lg text-sm bg-gray-50"
+                                    value={historyFilters.name}
+                                    onChange={(e) => setHistoryFilters(prev => ({...prev, name: e.target.value}))}
+                                >
+                                    <option value="">All Helpers</option>
+                                    {uniqueNames.map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                                <select 
+                                    className="w-1/2 p-2 border rounded-lg text-sm bg-gray-50"
+                                    value={historyFilters.action}
+                                    onChange={(e) => setHistoryFilters(prev => ({...prev, action: e.target.value}))}
+                                >
+                                    <option value="">All Actions</option>
+                                    {uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-left text-sm">
+                                <thead>
+                                    <tr className="bg-gray-50 border-b">
+                                        <th className="p-3">Date</th>
+                                        <th className="p-3">Name</th>
+                                        <th className="p-3">Action</th>
+                                        <th className="p-3 text-right">Amount</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {filteredTransactions.length === 0 && (
+                                        <tr>
+                                            <td colSpan="4" className="p-4 text-center text-gray-400">No records match filters.</td>
+                                        </tr>
+                                    )}
+                                    {filteredTransactions.map((t, idx) => (
+                                        <tr key={idx} className="border-b hover:bg-gray-50">
+                                            <td className="p-3 whitespace-nowrap">{new Date(t.date).toLocaleDateString()}</td>
+                                            <td className="p-3">{t.name}</td>
+                                            <td className="p-3 text-xs">{t.action}</td>
+                                            <td className="p-3 text-right font-mono">{t.amount}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
-            );
+                );
+            };
 
             // --- MAIN SWITCH ---
             return (
