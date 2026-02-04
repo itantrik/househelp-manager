@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow"> <!-- Prevents crawling -->
+    
+    <!-- Browser Title & Favicon -->
     <title>HouseHelp Manager</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏠</text></svg>">
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -224,6 +227,16 @@
             // --- RENDERERS ---
             const renderDashboard = () => {
                 const grandTotalPaid = helperStats.reduce((acc, curr) => acc + curr.totalPaidAllTime, 0);
+                
+                // Format YYYY-MM for input value
+                const currentMonthValue = `${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`;
+
+                const handleDateChange = (e) => {
+                    if(e.target.value) {
+                        const [year, month] = e.target.value.split('-');
+                        setDashboardDate(new Date(parseInt(year), parseInt(month) - 1, 1));
+                    }
+                };
 
                 return (
                     <div className="space-y-4">
@@ -236,18 +249,13 @@
                         <div className="flex justify-between items-center mb-2">
                             <h2 className="text-xl font-bold text-gray-800">Dashboard</h2>
                             
-                            {/* Date Navigation */}
-                            <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm p-1 border border-gray-200">
-                                <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-100 rounded text-gray-600">
-                                    <i data-lucide="chevron-left" size={20}></i>
-                                </button>
-                                <span className="text-sm font-bold text-blue-600 min-w-[110px] text-center select-none">
-                                    {dashboardDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                                </span>
-                                <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-100 rounded text-gray-600">
-                                    <i data-lucide="chevron-right" size={20}></i>
-                                </button>
-                            </div>
+                            {/* Date Picker */}
+                            <input 
+                                type="month" 
+                                value={currentMonthValue}
+                                onChange={handleDateChange}
+                                className="bg-white border border-gray-300 text-gray-900 text-sm font-bold rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 shadow-sm"
+                            />
                         </div>
 
                         {/* Lifetime Stats Widget */}
@@ -518,7 +526,7 @@
                         {view === 'history' && renderHistory()}
                     </main>
                     <footer className="p-6 text-center text-xs text-gray-400 font-medium">
-                        Made with <span className="text-red-500 text-sm">♥</span> by Gangwals
+                        Made with <span className="text-red-500 text-sm">♥</span> for Gangwals
                     </footer>
                 </div>
             );
