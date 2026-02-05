@@ -107,6 +107,16 @@
                         <div className="text-center p-5 bg-gray-900 rounded-xl text-white mt-4 shadow-lg">
                             <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Total Extra Pay</div>
                             <div className="text-4xl font-bold mt-2 text-green-400">₹ {result.total}</div>
+                            <div className="mt-3 pt-3 border-t border-gray-700 flex justify-center gap-4 text-[10px] text-gray-400">
+                                <div>
+                                    <span className="block text-gray-500">Daily Rate</span>
+                                    <span className="font-mono text-white">₹{result.daily}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-500">Hourly Rate</span>
+                                    <span className="font-mono text-white">₹{result.hourly}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -407,9 +417,7 @@
                          <div className="grid grid-cols-2 gap-3 mt-4">
                              <button onClick={() => setView('helpers')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="users" size={16}></i> Helpers</button>
                              <button onClick={() => setView('history')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="history" size={16}></i> History</button>
-                             {/* Shopping Button */}
-                             <button onClick={() => setView('shopping')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="shopping-bag" size={16}></i> Shopping</button>
-                             <button onClick={() => setView('calculator')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="calculator" size={16}></i> Overtime</button>
+                             <button onClick={() => setView('calculator')} className="col-span-2 bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="calculator" size={16}></i> Overtime</button>
                         </div>
                     </div>
                 );
