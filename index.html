@@ -35,6 +35,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .strike-through { text-decoration: line-through; color: #9ca3af; }
     </style>
 </head>
 <body>
@@ -44,9 +45,8 @@
         // --- CONFIGURATION ---
         // PASTE YOUR GOOGLE SCRIPT WEB APP URL INSIDE THE QUOTES BELOW
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbytkALz5wXHB9pMfbSOTqYtKLV6yp5H5wp3QdDupQF89uggt_HiYMbrOXP5ubw52_i0/exec"; 
-        // Example: "https://script.google.com/macros/s/AKfycbx.../exec"
-
-        const { useState, useEffect, useMemo } = React;
+        
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // --- SUB-COMPONENT: OVERTIME CALCULATOR ---
         function Calculator({ onBack }) {
@@ -58,7 +58,7 @@
 
             const result = useMemo(() => {
                 const s = parseFloat(salary) || 0;
-                const d = parseFloat(stdDays) || 1; // Avoid division by zero
+                const d = parseFloat(stdDays) || 1;
                 const h = parseFloat(stdHours) || 1;
                 
                 const dailyRate = s / d;
@@ -76,20 +76,15 @@
 
             return (
                 <div className="bg-white p-6 rounded-xl shadow-sm fade-in">
-                    {/* Header */}
                     <div className="flex items-center mb-6">
                         <button onClick={onBack} className="mr-3 text-gray-500 hover:text-blue-600 transition">
                             <i data-lucide="arrow-left"></i>
                         </button>
                         <h2 className="text-xl font-bold text-gray-800">Overtime Calculator</h2>
                     </div>
-                    
                     <div className="space-y-4">
-                        {/* Base Config */}
                         <div className="p-4 bg-gray-50 rounded-lg space-y-3 border border-gray-100">
-                            <h3 className="font-bold text-gray-700 text-sm flex items-center gap-2">
-                                <i data-lucide="settings-2" size={14}></i> Base Settings
-                            </h3>
+                            <h3 className="font-bold text-gray-700 text-sm flex items-center gap-2"><i data-lucide="settings-2" size={14}></i> Base Settings</h3>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">Monthly Salary</label>
                                 <div className="relative">
@@ -98,48 +93,20 @@
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <div className="w-1/2">
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Total Days/Mo</label>
-                                    <input type="number" value={stdDays} onChange={e => setStdDays(e.target.value)} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-200 outline-none" />
-                                </div>
-                                <div className="w-1/2">
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Hours/Day</label>
-                                    <input type="number" value={stdHours} onChange={e => setStdHours(e.target.value)} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-200 outline-none" />
-                                </div>
+                                <div className="w-1/2"><label className="block text-xs font-semibold text-gray-500 mb-1">Total Days/Mo</label><input type="number" value={stdDays} onChange={e => setStdDays(e.target.value)} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-200 outline-none" /></div>
+                                <div className="w-1/2"><label className="block text-xs font-semibold text-gray-500 mb-1">Hours/Day</label><input type="number" value={stdHours} onChange={e => setStdHours(e.target.value)} className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-200 outline-none" /></div>
                             </div>
                         </div>
-
-                        {/* Extra Work */}
                          <div className="p-4 bg-blue-50 rounded-lg space-y-3 border border-blue-100">
-                            <h3 className="font-bold text-blue-800 text-sm flex items-center gap-2">
-                                <i data-lucide="clock" size={14}></i> Additional Work
-                            </h3>
+                            <h3 className="font-bold text-blue-800 text-sm flex items-center gap-2"><i data-lucide="clock" size={14}></i> Additional Work</h3>
                             <div className="flex gap-2">
-                                <div className="w-1/2">
-                                    <label className="block text-xs font-semibold text-blue-600 mb-1">Extra Days</label>
-                                    <input type="number" value={otDays} onChange={e => setOtDays(e.target.value)} className="w-full p-2 border rounded border-blue-200 focus:ring-2 focus:ring-blue-300 outline-none" placeholder="0" />
-                                </div>
-                                <div className="w-1/2">
-                                    <label className="block text-xs font-semibold text-blue-600 mb-1">Extra Hours</label>
-                                    <input type="number" value={otHours} onChange={e => setOtHours(e.target.value)} className="w-full p-2 border rounded border-blue-200 focus:ring-2 focus:ring-blue-300 outline-none" placeholder="0" />
-                                </div>
+                                <div className="w-1/2"><label className="block text-xs font-semibold text-blue-600 mb-1">Extra Days</label><input type="number" value={otDays} onChange={e => setOtDays(e.target.value)} className="w-full p-2 border rounded border-blue-200 focus:ring-2 focus:ring-blue-300 outline-none" placeholder="0" /></div>
+                                <div className="w-1/2"><label className="block text-xs font-semibold text-blue-600 mb-1">Extra Hours</label><input type="number" value={otHours} onChange={e => setOtHours(e.target.value)} className="w-full p-2 border rounded border-blue-200 focus:ring-2 focus:ring-blue-300 outline-none" placeholder="0" /></div>
                             </div>
                         </div>
-
-                        {/* Result */}
                         <div className="text-center p-5 bg-gray-900 rounded-xl text-white mt-4 shadow-lg">
                             <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Total Extra Pay</div>
                             <div className="text-4xl font-bold mt-2 text-green-400">₹ {result.total}</div>
-                            <div className="mt-3 pt-3 border-t border-gray-700 flex justify-center gap-4 text-[10px] text-gray-400">
-                                <div>
-                                    <span className="block text-gray-500">Daily Rate</span>
-                                    <span className="font-mono text-white">₹{result.daily}</span>
-                                </div>
-                                <div>
-                                    <span className="block text-gray-500">Hourly Rate</span>
-                                    <span className="font-mono text-white">₹{result.hourly}</span>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -150,37 +117,18 @@
         function LoginScreen({ onUnlock }) {
             const [pin, setPin] = useState('');
             const [error, setError] = useState(false);
-
             const handleSubmit = (e) => {
                 e.preventDefault();
-                const success = onUnlock(pin);
-                if (!success) {
-                    setError(true);
-                    setPin('');
-                }
+                if (!onUnlock(pin)) { setError(true); setPin(''); }
             };
-
             return (
                 <div className="min-h-screen flex items-center justify-center p-4">
                     <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
-                        <div className="mb-6 inline-block p-4 bg-blue-50 rounded-full text-blue-600">
-                            <i data-lucide="lock" size={32}></i>
-                        </div>
+                        <div className="mb-6 inline-block p-4 bg-blue-50 rounded-full text-blue-600"><i data-lucide="lock" size={32}></i></div>
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-                        <p className="text-gray-500 mb-6 text-sm">Please enter your access PIN to continue.</p>
-                        
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <input 
-                                type="password" 
-                                value={pin}
-                                onChange={e => { setPin(e.target.value); setError(false); }}
-                                className={`w-full p-3 text-center text-lg tracking-widest border rounded-xl outline-none focus:ring-2 ${error ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-200'}`}
-                                placeholder="• • • •"
-                                autoFocus
-                            />
-                            <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 transition">
-                                Unlock App
-                            </button>
+                            <input type="password" value={pin} onChange={e => { setPin(e.target.value); setError(false); }} className={`w-full p-3 text-center text-lg tracking-widest border rounded-xl outline-none focus:ring-2 ${error ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-200'}`} placeholder="• • • •" autoFocus />
+                            <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 transition">Unlock App</button>
                         </form>
                     </div>
                 </div>
@@ -191,117 +139,68 @@
         function App() {
             // --- STATE ---
             const [view, setView] = useState('dashboard'); 
-            const [loading, setLoading] = useState(true); // Start loading true to fetch/auth check
+            const [loading, setLoading] = useState(true);
             const [transactions, setTransactions] = useState([]);
             const [helpers, setHelpers] = useState([]);
+            const [shoppingList, setShoppingList] = useState([]); // New Shopping State
             const [refreshTrigger, setRefreshTrigger] = useState(0);
             const [successMsg, setSuccessMsg] = useState('');
             
-            // Authentication State
             const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [authPassword, setAuthPassword] = useState(null); // Stores the password from DB
+            const [authPassword, setAuthPassword] = useState(null);
             
-            // UI State
             const [expandedHelpers, setExpandedHelpers] = useState({}); 
             const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); 
             const [historyPage, setHistoryPage] = useState(1); 
+            const [isShoppingExpanded, setIsShoppingExpanded] = useState(false); // Collapsed completed items
             const ITEMS_PER_PAGE = 20;
-            
-            // Dashboard Date State
             const [dashboardDate, setDashboardDate] = useState(new Date());
 
             // Transaction Form
-            const [formData, setFormData] = useState({
-                type: 'Monthly',
-                name: '',
-                action: 'Payment/Advance',
-                amount: '',
-                date: new Date().toISOString().split('T')[0],
-                notes: ''
-            });
-
+            const [formData, setFormData] = useState({ type: 'Monthly', name: '', action: 'Payment/Advance', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
             // Helper Form
-            const [helperForm, setHelperForm] = useState({
-                name: '',
-                type: 'Monthly',
-                defaultAmount: ''
-            });
+            const [helperForm, setHelperForm] = useState({ name: '', type: 'Monthly', defaultAmount: '' });
+            // Shopping Form
+            const [shoppingInput, setShoppingInput] = useState('');
 
             // --- EFFECTS ---
-            useEffect(() => {
-                if (!WEB_APP_URL) return;
-                fetchData();
-            }, [refreshTrigger]);
+            useEffect(() => { if (WEB_APP_URL) fetchData(); }, [refreshTrigger]);
+            useEffect(() => { lucide.createIcons(); }, [view, transactions, helpers, shoppingList, isShoppingExpanded, expandedHelpers]);
+            useEffect(() => { setSuccessMsg(''); }, [view]);
+            useEffect(() => { setHistoryPage(1); }, [historyFilters]);
 
-            useEffect(() => {
-                // Initialize icons whenever DOM changes significantly
-                lucide.createIcons();
-            }, [view, transactions, helpers, dashboardDate, expandedHelpers, historyPage, isAuthenticated]);
-
-            useEffect(() => {
-                setSuccessMsg('');
-            }, [view]);
-
-            useEffect(() => {
-                setHistoryPage(1);
-            }, [historyFilters]);
-
-            // --- API ACTIONS & AUTH LOGIC ---
+            // --- API ACTIONS ---
             const fetchData = async () => {
                 setLoading(true);
                 try {
                     const response = await fetch(WEB_APP_URL);
                     const data = await response.json();
                     if (data.status === 'success') {
-                        // 1. Process Transactions
-                        const sortedTx = data.data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-                        setTransactions(sortedTx);
-                        
-                        // 2. Process Helpers & Authentication
+                        setTransactions(data.data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date)));
                         const allHelpers = data.data.helpers || [];
-                        
-                        // Check for special admin helper
                         const adminHelper = allHelpers.find(h => h.name === '__ADMIN__');
-                        const realHelpers = allHelpers.filter(h => h.name !== '__ADMIN__');
-                        
-                        setHelpers(realHelpers);
+                        setHelpers(allHelpers.filter(h => h.name !== '__ADMIN__'));
+                        setShoppingList(data.data.shopping || []); // Get shopping list
 
-                        // Auth Logic
                         if (adminHelper && adminHelper.amount) {
-                            setAuthPassword(adminHelper.amount.toString()); // Store password
+                            setAuthPassword(adminHelper.amount.toString());
                             checkSession(adminHelper.amount.toString());
-                        } else {
-                            // No admin setup, allow access
-                            setIsAuthenticated(true);
-                        }
+                        } else { setIsAuthenticated(true); }
                     }
-                } catch (error) {
-                    console.error("Error fetching data", error);
-                }
+                } catch (error) { console.error("Error fetching data", error); }
                 setLoading(false);
             };
 
             const checkSession = (password) => {
                 const session = JSON.parse(localStorage.getItem('househelp_auth_session'));
-                if (session && session.token === password) {
-                    const now = new Date().getTime();
-                    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-                    if (now - session.timestamp < thirtyDays) {
-                        setIsAuthenticated(true);
-                        return;
-                    }
-                }
-                setIsAuthenticated(false);
+                if (session && session.token === password && (new Date().getTime() - session.timestamp < 30 * 24 * 60 * 60 * 1000)) {
+                    setIsAuthenticated(true);
+                } else { setIsAuthenticated(false); }
             };
 
             const handleUnlock = (inputPin) => {
                 if (inputPin === authPassword) {
-                    // Save session
-                    const session = {
-                        token: authPassword,
-                        timestamp: new Date().getTime()
-                    };
-                    localStorage.setItem('househelp_auth_session', JSON.stringify(session));
+                    localStorage.setItem('househelp_auth_session', JSON.stringify({ token: authPassword, timestamp: new Date().getTime() }));
                     setIsAuthenticated(true);
                     return true;
                 }
@@ -309,226 +208,181 @@
             };
 
             const submitData = async (payloadObj) => {
-                if (!WEB_APP_URL) {
-                    alert("Please configure the WEB_APP_URL in the code first.");
-                    return;
+                if (!WEB_APP_URL) return;
+                // Optimistic UI updates for shopping are handled in handleShoppingSubmit/Toggle
+                if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
+                    setLoading(true);
                 }
-                setLoading(true);
-                setSuccessMsg('');
+                
                 try {
                     const payload = new URLSearchParams(payloadObj);
                     await fetch(WEB_APP_URL, { method: 'POST', body: payload });
-                    setRefreshTrigger(prev => prev + 1);
                     
-                    setSuccessMsg("Saved successfully! ✅");
-                    setTimeout(() => setSuccessMsg(''), 3000);
-
-                    if(payloadObj.method === 'add_transaction') {
-                        setFormData(prev => ({ ...prev, amount: '', notes: '' }));
-                    }
-                } catch (error) {
-                    console.error("Error submitting", error);
-                    alert("Submission sent. Refreshing...");
-                    setRefreshTrigger(prev => prev + 1);
-                }
-                setLoading(false);
-            };
-
-            // --- EVENT HANDLERS ---
-            const handleTransactionSubmit = (e) => {
-                e.preventDefault();
-                submitData({ ...formData, method: 'add_transaction' });
-            };
-
-            const handleHelperSubmit = (e) => {
-                e.preventDefault();
-                if (!helperForm.name) { alert("Name is required"); return; }
-                submitData({ 
-                    method: 'add_helper',
-                    name: helperForm.name,
-                    type: helperForm.type,
-                    defaultAmount: helperForm.defaultAmount
-                });
-                setHelperForm({ name: '', type: 'Monthly', defaultAmount: '' });
-                setView('helpers');
-            };
-
-            const handleHelperSelect = (e) => {
-                const selectedName = e.target.value;
-                const selectedHelper = helpers.find(h => h.name === selectedName);
-                if (selectedHelper) {
-                    setFormData(prev => ({
-                        ...prev,
-                        name: selectedName,
-                        type: selectedHelper.type,
-                        amount: selectedHelper.amount || '' 
-                    }));
-                } else {
-                    setFormData(prev => ({ ...prev, name: selectedName }));
-                }
-            };
-
-            const toggleHelper = (name) => {
-                setExpandedHelpers(prev => ({
-                    ...prev,
-                    [name]: !prev[name]
-                }));
-            };
-
-            // --- CALCULATIONS ---
-            const helperStats = useMemo(() => {
-                const selectedMonth = dashboardDate.getMonth();
-                const selectedYear = dashboardDate.getFullYear();
-
-                return helpers.map(helper => {
-                    const myTx = transactions.filter(t => t.name === helper.name);
-                    const thisMonthTx = myTx.filter(t => {
-                        const d = new Date(t.date);
-                        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
-                    });
-
-                    let due = 0;
-                    let paid = 0;
-
-                    if (helper.type === 'Monthly') {
-                        due = thisMonthTx
-                            .filter(t => t.action === 'Salary Due')
-                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
-                        paid = thisMonthTx
-                            .filter(t => t.action === 'Payment/Advance')
-                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                    if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
+                        setRefreshTrigger(prev => prev + 1);
+                        setSuccessMsg("Saved successfully! ✅");
+                        setTimeout(() => setSuccessMsg(''), 3000);
+                        if(payloadObj.method === 'add_transaction') setFormData(prev => ({ ...prev, amount: '', notes: '' }));
                     } else {
-                        due = thisMonthTx
-                            .filter(t => t.action === 'Work Logged')
-                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
-                        paid = thisMonthTx
-                            .filter(t => t.action === 'Payment')
-                            .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+                        // Silent refresh for shopping to sync IDs/Dates properly
+                        fetchData(); 
                     }
+                } catch (error) { console.error(error); alert("Save failed"); setLoading(false); }
+                if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') setLoading(false);
+            };
 
-                    const totalDue = myTx
-                        .filter(t => t.action === 'Salary Due' || t.action === 'Work Logged')
-                        .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
-                    const totalPaid = myTx
-                        .filter(t => t.action === 'Payment/Advance' || t.action === 'Payment')
-                        .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+            // --- HANDLERS ---
+            const handleTransactionSubmit = (e) => { e.preventDefault(); submitData({ ...formData, method: 'add_transaction' }); };
+            const handleHelperSubmit = (e) => { e.preventDefault(); if(!helperForm.name) return; submitData({ ...helperForm, method: 'add_helper' }); setHelperForm({ name: '', type: 'Monthly', defaultAmount: '' }); setView('helpers'); };
+            const handleHelperSelect = (e) => { 
+                const h = helpers.find(h => h.name === e.target.value);
+                setFormData(prev => ({ ...prev, name: e.target.value, type: h ? h.type : prev.type, amount: h ? (h.amount || '') : prev.amount })); 
+            };
+            
+            // Shopping Handlers
+            const handleShoppingSubmit = (e) => {
+                e.preventDefault();
+                if (!shoppingInput.trim()) return;
+                
+                const tempItem = { date: new Date().toISOString(), item: shoppingInput, status: 'Open' };
+                setShoppingList([...shoppingList, tempItem]); // Optimistic Add
+                
+                submitData({ method: 'add_shopping_item', item: shoppingInput });
+                setShoppingInput('');
+            };
 
-                    return {
-                        ...helper,
-                        monthDue: due,
-                        monthPaid: paid,
-                        monthBalance: due - paid, 
-                        overallBalance: totalDue - totalPaid,
-                        totalPaidAllTime: totalPaid
-                    };
-                });
-            }, [helpers, transactions, dashboardDate]);
+            const toggleShoppingItem = (item) => {
+                const updatedList = shoppingList.map(i => 
+                    (i.item === item.item && i.date === item.date) ? { ...i, status: i.status === 'Open' ? 'Done' : 'Open' } : i
+                );
+                setShoppingList(updatedList); // Optimistic Toggle
+                
+                submitData({ method: 'toggle_shopping_item', item: item.item, date: item.date });
+            };
 
             // --- RENDERERS ---
-            const renderDashboard = () => {
-                const grandTotalPaid = helperStats.reduce((acc, curr) => acc + curr.totalPaidAllTime, 0);
-                const currentMonthValue = `${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`;
+            const renderShopping = () => {
+                const openItems = shoppingList.filter(i => i.status === 'Open');
+                const doneItems = shoppingList.filter(i => i.status === 'Done');
 
-                const handleDateChange = (e) => {
-                    if(e.target.value) {
-                        const [year, month] = e.target.value.split('-');
-                        setDashboardDate(new Date(parseInt(year), parseInt(month) - 1, 1));
+                return (
+                    <div className="bg-white p-6 rounded-xl shadow-sm fade-in min-h-[500px]">
+                        <div className="flex items-center mb-6">
+                            <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
+                            <h2 className="text-xl font-bold text-gray-800">Shopping List</h2>
+                        </div>
+
+                        {/* Add Item */}
+                        <form onSubmit={handleShoppingSubmit} className="mb-6 relative">
+                            <input 
+                                type="text" 
+                                className="w-full p-4 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+                                placeholder="Add item (e.g. Milk)..."
+                                value={shoppingInput}
+                                onChange={e => setShoppingInput(e.target.value)}
+                                autoFocus
+                            />
+                            <button type="submit" className="absolute right-3 top-3 p-1 text-blue-600 bg-blue-50 rounded-full hover:bg-blue-100 transition">
+                                <i data-lucide="plus" size={24}></i>
+                            </button>
+                        </form>
+
+                        {/* Open Items */}
+                        <div className="space-y-2 mb-6">
+                            {openItems.length === 0 && <p className="text-center text-gray-400 py-4 italic">Everything bought! 🎉</p>}
+                            {openItems.map((item, idx) => (
+                                <div key={idx} onClick={() => toggleShoppingItem(item)} className="flex items-center p-3 bg-white border border-gray-100 rounded-lg shadow-sm cursor-pointer hover:bg-gray-50 transition select-none group">
+                                    <div className="w-5 h-5 rounded border-2 border-gray-300 mr-3 group-hover:border-blue-400"></div>
+                                    <span className="text-gray-800 font-medium">{item.item}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Completed Items */}
+                        {doneItems.length > 0 && (
+                            <div className="border-t border-gray-100 pt-4">
+                                <button 
+                                    onClick={() => setIsShoppingExpanded(!isShoppingExpanded)}
+                                    className="flex items-center text-gray-400 text-sm font-bold mb-3 hover:text-gray-600"
+                                >
+                                    <i data-lucide={isShoppingExpanded ? "chevron-down" : "chevron-right"} size={16} className="mr-1"></i>
+                                    Completed ({doneItems.length})
+                                </button>
+                                
+                                {isShoppingExpanded && (
+                                    <div className="space-y-2 fade-in">
+                                        {doneItems.map((item, idx) => (
+                                            <div key={idx} onClick={() => toggleShoppingItem(item)} className="flex items-center p-2 opacity-60 cursor-pointer hover:opacity-100 transition">
+                                                <div className="w-5 h-5 rounded bg-green-100 border border-green-300 mr-3 flex items-center justify-center text-green-600">
+                                                    <i data-lucide="check" size={12}></i>
+                                                </div>
+                                                <span className="text-gray-500 line-through decoration-gray-400">{item.item}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const renderDashboard = () => {
+                const currentMonthValue = `${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`;
+                // ... (existing calc logic same as before) ...
+                const helperStats = helpers.map(helper => {
+                    const myTx = transactions.filter(t => t.name === helper.name);
+                    const thisMonthTx = myTx.filter(t => { const d = new Date(t.date); return d.getMonth() === dashboardDate.getMonth() && d.getFullYear() === dashboardDate.getFullYear(); });
+                    let due = 0, paid = 0;
+                    if (helper.type === 'Monthly') {
+                        due = thisMonthTx.filter(t => t.action === 'Salary Due').reduce((a, c) => a + parseFloat(c.amount||0), 0);
+                        paid = thisMonthTx.filter(t => t.action === 'Payment/Advance').reduce((a, c) => a + parseFloat(c.amount||0), 0);
+                    } else {
+                        due = thisMonthTx.filter(t => t.action === 'Work Logged').reduce((a, c) => a + parseFloat(c.amount||0), 0);
+                        paid = thisMonthTx.filter(t => t.action === 'Payment').reduce((a, c) => a + parseFloat(c.amount||0), 0);
                     }
-                };
+                    const totalDue = myTx.filter(t => t.action === 'Salary Due' || t.action === 'Work Logged').reduce((a, c) => a + parseFloat(c.amount||0), 0);
+                    const totalPaid = myTx.filter(t => t.action === 'Payment/Advance' || t.action === 'Payment').reduce((a, c) => a + parseFloat(c.amount||0), 0);
+                    return { ...helper, monthDue: due, monthPaid: paid, overallBalance: totalDue - totalPaid, totalPaidAllTime: totalPaid };
+                });
+                const grandTotalPaid = helperStats.reduce((acc, curr) => acc + curr.totalPaidAllTime, 0);
 
                 return (
                     <div className="space-y-4 fade-in">
-                        {!WEB_APP_URL && (
-                             <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-red-700 text-sm mb-4">
-                                <strong>Configuration Needed:</strong> Paste your Google Script URL into the code.
-                            </div>
-                        )}
-
+                        {!WEB_APP_URL && <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-red-700 text-sm mb-4"><strong>Config Needed:</strong> Paste URL in code.</div>}
                         <div className="flex justify-between items-center mb-2">
                             <h2 className="text-xl font-bold text-gray-800">Dashboard</h2>
-                            <input 
-                                type="month" 
-                                value={currentMonthValue}
-                                onChange={handleDateChange}
-                                className="bg-white border border-gray-300 text-gray-900 text-sm font-bold rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 shadow-sm"
-                            />
+                            <input type="month" value={currentMonthValue} onChange={e => { if(e.target.value) { const [y,m] = e.target.value.split('-'); setDashboardDate(new Date(parseInt(y), parseInt(m)-1, 1)); }}} className="bg-white border border-gray-300 text-gray-900 text-sm font-bold rounded-lg p-2 shadow-sm" />
                         </div>
 
-                        {/* Helper Cards */}
+                        {/* Helpers Cards */}
                         <div className="space-y-3">
-                            {!loading && helpers.length === 0 && (
-                                <div className="text-center p-6 bg-white rounded-xl border border-dashed border-gray-300">
-                                    <p className="text-gray-500 mb-2">No helpers added yet.</p>
-                                    <button onClick={() => setView('helpers')} className="text-blue-600 font-bold">Add your first helper</button>
-                                </div>
-                            )}
-
+                            {!loading && helpers.length === 0 && <div className="text-center p-6 bg-white rounded-xl border border-dashed border-gray-300"><p className="text-gray-500 mb-2">No helpers.</p><button onClick={() => setView('helpers')} className="text-blue-600 font-bold">Add Helper</button></div>}
                             {helperStats.map((h, i) => {
                                 const isExpanded = !!expandedHelpers[h.name];
                                 return (
                                     <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
-                                        {/* Header - Clickable to toggle */}
-                                        <div 
-                                            className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-50 transition-colors"
-                                            onClick={() => toggleHelper(h.name)}
-                                        >
+                                        <div className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => setExpandedHelpers(prev => ({...prev, [h.name]: !prev[h.name]}))}>
                                             <div className="flex items-start gap-3">
-                                                 <div className={`mt-1 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                                                    <i data-lucide="chevron-down" size={20}></i>
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-lg text-gray-800">{h.name}</h3>
-                                                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{h.type}</span>
-                                                </div>
+                                                 <div className={`mt-1 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}><i data-lucide="chevron-down" size={20}></i></div>
+                                                <div><h3 className="font-bold text-lg text-gray-800">{h.name}</h3><span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{h.type}</span></div>
                                             </div>
                                             <div className="text-right">
-                                                <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                                                    {h.overallBalance > 0 ? `-${h.overallBalance}` : `+${Math.abs(h.overallBalance)}`}
-                                                </div>
+                                                <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>{h.overallBalance > 0 ? `-${h.overallBalance}` : `+${Math.abs(h.overallBalance)}`}</div>
                                                 <div className="text-[10px] text-gray-400 uppercase tracking-wide">Net Balance</div>
                                             </div>
                                         </div>
-                                        
-                                        {/* Body - Conditionally Rendered */}
                                         {isExpanded && (
                                             <div className="px-5 pb-5 pt-0 border-t border-gray-50 animate-fade-in-down">
-                                                <div className="h-4"></div> {/* Spacer */}
-                                                
-                                                {/* Monthly Progress */}
+                                                <div className="h-4"></div>
                                                 <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm mb-3">
-                                                    <div>
-                                                        <div className="text-gray-500 text-xs">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
-                                                        <div className="font-semibold">{h.monthDue}</div>
-                                                    </div>
+                                                    <div><div className="text-gray-500 text-xs">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold">{h.monthDue}</div></div>
                                                     <div className="text-gray-300">|</div>
-                                                    <div className="text-right">
-                                                        <div className="text-gray-500 text-xs">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div>
-                                                        <div className="font-semibold text-green-600">{h.monthPaid}</div>
-                                                    </div>
+                                                    <div className="text-right"><div className="text-gray-500 text-xs">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-green-600">{h.monthPaid}</div></div>
                                                 </div>
-                                                
-                                                {/* Action Shortcuts */}
                                                 <div className="flex gap-2">
-                                                     <button 
-                                                        onClick={(e) => { 
-                                                            e.stopPropagation(); 
-                                                            setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '' }); 
-                                                            setView('add_transaction'); 
-                                                        }}
-                                                        className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700"
-                                                    >
-                                                        Pay
-                                                    </button>
-                                                    <button 
-                                                        onClick={(e) => { 
-                                                            e.stopPropagation(); 
-                                                            setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '' }); 
-                                                            setView('add_transaction'); 
-                                                        }}
-                                                        className="flex-1 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200"
-                                                    >
-                                                        {h.type === 'Monthly' ? 'Add Due' : 'Log Work'}
-                                                    </button>
+                                                     <button onClick={(e) => { e.stopPropagation(); setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '' }); setView('add_transaction'); }} className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700">Pay</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '' }); setView('add_transaction'); }} className="flex-1 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200">{h.type === 'Monthly' ? 'Add Due' : 'Log Work'}</button>
                                                 </div>
                                             </div>
                                         )}
@@ -537,38 +391,18 @@
                             })}
                         </div>
 
-                        {/* Lifetime Stats Widget */}
                         <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 rounded-xl shadow-lg text-white mb-6">
                             <h3 className="text-blue-100 text-sm font-medium mb-1">Total Paid (Lifetime)</h3>
-                            <div className="text-3xl font-bold mb-4">
-                                {grandTotalPaid.toLocaleString()}
-                            </div>
-                            
-                            {helperStats.length > 0 && (
-                                <div className="space-y-2 pt-3 border-t border-blue-500/30">
-                                    <h4 className="text-[10px] font-bold text-blue-200 uppercase tracking-wide">Breakdown by Helper</h4>
-                                    {helperStats.map((h, i) => (
-                                        <div key={i} className="flex justify-between items-center text-sm">
-                                            <span>{h.name}</span>
-                                            <span className="font-mono font-medium opacity-90">{h.totalPaidAllTime.toLocaleString()}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            <div className="text-3xl font-bold mb-4">{grandTotalPaid.toLocaleString()}</div>
+                            {helperStats.length > 0 && <div className="space-y-2 pt-3 border-t border-blue-500/30"><h4 className="text-[10px] font-bold text-blue-200 uppercase tracking-wide">Breakdown by Helper</h4>{helperStats.map((h, i) => (<div key={i} className="flex justify-between items-center text-sm"><span>{h.name}</span><span className="font-mono font-medium opacity-90">{h.totalPaidAllTime.toLocaleString()}</span></div>))}</div>}
                         </div>
 
-                        {/* Quick Nav */}
                          <div className="grid grid-cols-2 gap-3 mt-4">
-                             <button onClick={() => setView('helpers')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700">
-                                <i data-lucide="users" size={16}></i> Manage Helpers
-                            </button>
-                             <button onClick={() => setView('history')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700">
-                                <i data-lucide="history" size={16}></i> View History
-                            </button>
-                            {/* NEW: Overtime Calculator Button */}
-                            <button onClick={() => setView('calculator')} className="col-span-2 bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700">
-                                <i data-lucide="calculator" size={16}></i> Overtime Calculator
-                            </button>
+                             <button onClick={() => setView('helpers')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="users" size={16}></i> Helpers</button>
+                             <button onClick={() => setView('history')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="history" size={16}></i> History</button>
+                             {/* Shopping Button */}
+                             <button onClick={() => setView('shopping')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="shopping-bag" size={16}></i> Shopping</button>
+                             <button onClick={() => setView('calculator')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-center gap-2 hover:bg-gray-50 text-sm font-medium text-gray-700"><i data-lucide="calculator" size={16}></i> Overtime</button>
                         </div>
                     </div>
                 );
@@ -576,161 +410,42 @@
 
             const renderTransactionForm = () => (
                 <div className="bg-white p-6 rounded-xl shadow-sm fade-in">
-                    <div className="flex items-center mb-6">
-                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
-                        <h2 className="text-xl font-bold">Transaction</h2>
-                    </div>
-
+                    <div className="flex items-center mb-6"><button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold">Transaction</h2></div>
                     <form onSubmit={handleTransactionSubmit} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Helper</label>
-                            <div className="relative">
-                                <select 
-                                    className="w-full p-3 border border-gray-300 rounded-lg bg-white"
-                                    value={formData.name}
-                                    onChange={handleHelperSelect}
-                                >
-                                    <option value="">-- Select --</option>
-                                    {helpers.map((h, i) => <option key={i} value={h.name}>{h.name}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
-                            <select 
-                                className="w-full p-3 border border-gray-300 rounded-lg bg-white"
-                                value={formData.action}
-                                onChange={e => setFormData({...formData, action: e.target.value})}
-                            >
-                                {formData.type === 'Monthly' ? (
-                                    <>
-                                        <option value="Payment/Advance">Payment / Advance</option>
-                                        <option value="Salary Due">Salary Due</option>
-                                    </>
-                                ) : (
-                                    <>
-                                        <option value="Work Logged">Log Work Week</option>
-                                        <option value="Payment">Payment</option>
-                                    </>
-                                )}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                            <input 
-                                type="number" 
-                                className="w-full p-3 border border-gray-300 rounded-lg"
-                                value={formData.amount}
-                                onChange={e => setFormData({...formData, amount: e.target.value})}
-                                placeholder="0.00"
-                            />
-                        </div>
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                            <input 
-                                type="date" 
-                                className="w-full p-3 border border-gray-300 rounded-lg"
-                                value={formData.date}
-                                onChange={e => setFormData({...formData, date: e.target.value})}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                            <input 
-                                type="text" 
-                                className="w-full p-3 border border-gray-300 rounded-lg"
-                                value={formData.notes}
-                                onChange={e => setFormData({...formData, notes: e.target.value})}
-                                placeholder="Optional"
-                            />
-                        </div>
-
-                        <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">
-                            {loading ? 'Saving...' : 'Save'}
-                        </button>
-                        
-                        {successMsg && (
-                            <div className="mt-2 text-green-600 text-sm font-bold text-center bg-green-50 p-2 rounded animate-pulse">
-                                {successMsg}
-                            </div>
-                        )}
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Helper</label><select className="w-full p-3 border border-gray-300 rounded-lg bg-white" value={formData.name} onChange={handleHelperSelect}><option value="">-- Select --</option>{helpers.map((h, i) => <option key={i} value={h.name}>{h.name}</option>)}</select></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Action</label><select className="w-full p-3 border border-gray-300 rounded-lg bg-white" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>{formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>)}</select></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Amount</label><input type="number" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Notes</label><input type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Optional" /></div>
+                        <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">{loading ? 'Saving...' : 'Save'}</button>
+                        {successMsg && <div className="mt-2 text-green-600 text-sm font-bold text-center bg-green-50 p-2 rounded animate-pulse">{successMsg}</div>}
                     </form>
                 </div>
             );
 
             const renderHelpersManager = () => (
                 <div className="bg-white p-6 rounded-xl shadow-sm fade-in">
-                    <div className="flex items-center mb-6">
-                        <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
-                        <h2 className="text-xl font-bold">Manage Helpers</h2>
-                    </div>
-                    
+                    <div className="flex items-center mb-6"><button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold">Manage Helpers</h2></div>
                     <form onSubmit={handleHelperSubmit} className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 space-y-3">
-                        <input 
-                            type="text" placeholder="Name" className="w-full p-2 border rounded"
-                            value={helperForm.name} onChange={e => setHelperForm({...helperForm, name: e.target.value})}
-                        />
+                        <input type="text" placeholder="Name" className="w-full p-2 border rounded" value={helperForm.name} onChange={e => setHelperForm({...helperForm, name: e.target.value})} />
                         <div className="flex gap-2">
-                            <select 
-                                className="w-1/2 p-2 border rounded bg-white"
-                                value={helperForm.type} onChange={e => setHelperForm({...helperForm, type: e.target.value})}
-                            >
-                                <option value="Monthly">Monthly</option>
-                                <option value="Weekly">Weekly</option>
-                            </select>
-                            <input 
-                                type="number" placeholder="Current Salary" className="w-1/2 p-2 border rounded"
-                                value={helperForm.defaultAmount} onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})}
-                            />
+                            <select className="w-1/2 p-2 border rounded bg-white" value={helperForm.type} onChange={e => setHelperForm({...helperForm, type: e.target.value})}><option value="Monthly">Monthly</option><option value="Weekly">Weekly</option></select>
+                            <input type="number" placeholder="Current Salary" className="w-1/2 p-2 border rounded" value={helperForm.defaultAmount} onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})} />
                         </div>
-
-                        <p className="text-[10px] text-gray-500 bg-blue-50 p-2 rounded border border-blue-100">
-                            <i className="inline-block mr-1">ℹ️</i> 
-                            Updating the rate here only affects <strong>new</strong> future transactions. Past records will remain unchanged.
-                        </p>
-
-                        <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded font-medium">
-                            {helpers.find(h => h.name === helperForm.name) ? 'Update Helper' : 'Save New Helper'}
-                        </button>
-
-                        {successMsg && (
-                            <div className="mt-2 text-green-600 text-sm font-bold text-center bg-green-50 p-2 rounded animate-pulse">
-                                {successMsg}
-                            </div>
-                        )}
+                        <p className="text-[10px] text-gray-500 bg-blue-50 p-2 rounded border border-blue-100"><i className="inline-block mr-1">ℹ️</i> Updating the rate here only affects <strong>new</strong> future transactions. Past records will remain unchanged.</p>
+                        <button type="submit" disabled={loading} className="w-full bg-green-600 text-white p-2 rounded font-medium">{helpers.find(h => h.name === helperForm.name) ? 'Update Helper' : 'Save New Helper'}</button>
+                        {successMsg && <div className="mt-2 text-green-600 text-sm font-bold text-center bg-green-50 p-2 rounded animate-pulse">{successMsg}</div>}
                     </form>
-
-                    <div className="space-y-2">
-                            {helpers.map((h, i) => (
-                                <div key={i} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded shadow-sm">
-                                    <div>
-                                        <div className="font-bold text-gray-800">{h.name}</div>
-                                        <div className="text-xs text-gray-500">{h.type} • {h.amount || 0}</div>
-                                    </div>
-                                    <button onClick={() => setHelperForm({name: h.name, type: h.type, defaultAmount: h.amount})} className="text-blue-600 text-xs">Edit</button>
-                                </div>
-                            ))}
-                    </div>
+                    <div className="space-y-2">{helpers.map((h, i) => (<div key={i} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded shadow-sm"><div><div className="font-bold text-gray-800">{h.name}</div><div className="text-xs text-gray-500">{h.type} • {h.amount || 0}</div></div><button onClick={() => setHelperForm({name: h.name, type: h.type, defaultAmount: h.amount})} className="text-blue-600 text-xs">Edit</button></div>))}</div>
                 </div>
             );
 
             const renderHistory = () => {
-                // Get unique values for dropdowns
                 const uniqueNames = [...new Set(transactions.map(t => t.name))].filter(Boolean).sort();
                 const uniqueActions = [...new Set(transactions.map(t => t.action))].filter(Boolean).sort();
-
-                // Filter Logic
                 const filteredTransactions = transactions.filter(t => {
-                    const matchName = historyFilters.name ? t.name === historyFilters.name : true;
-                    const matchAction = historyFilters.action ? t.action === historyFilters.action : true;
-                    return matchName && matchAction;
+                    return (historyFilters.name ? t.name === historyFilters.name : true) && (historyFilters.action ? t.action === historyFilters.action : true);
                 });
-
-                // Pagination Logic
                 const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
                 const startIndex = (historyPage - 1) * ITEMS_PER_PAGE;
                 const currentData = filteredTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -738,62 +453,22 @@
                 return (
                     <div className="bg-white p-4 rounded-xl shadow-sm h-full fade-in">
                          <div className="flex flex-col mb-4">
-                            <div className="flex items-center mb-4">
-                                <button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button>
-                                <h2 className="text-xl font-bold">History</h2>
-                            </div>
-                            
-                            {/* Filters */}
+                            <div className="flex items-center mb-4"><button onClick={() => setView('dashboard')} className="mr-3 text-gray-500"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold">History</h2></div>
                             <div className="flex gap-2">
-                                <select 
-                                    className="w-1/2 p-2 border rounded-lg text-sm bg-gray-50"
-                                    value={historyFilters.name}
-                                    onChange={(e) => setHistoryFilters(prev => ({...prev, name: e.target.value}))}
-                                >
-                                    <option value="">All Helpers</option>
-                                    {uniqueNames.map(n => <option key={n} value={n}>{n}</option>)}
-                                </select>
-                                <select 
-                                    className="w-1/2 p-2 border rounded-lg text-sm bg-gray-50"
-                                    value={historyFilters.action}
-                                    onChange={(e) => setHistoryFilters(prev => ({...prev, action: e.target.value}))}
-                                >
-                                    <option value="">All Actions</option>
-                                    {uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}
-                                </select>
+                                <select className="w-1/2 p-2 border rounded-lg text-sm bg-gray-50" value={historyFilters.name} onChange={(e) => setHistoryFilters(prev => ({...prev, name: e.target.value}))}><option value="">All Helpers</option>{uniqueNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
+                                <select className="w-1/2 p-2 border rounded-lg text-sm bg-gray-50" value={historyFilters.action} onChange={(e) => setHistoryFilters(prev => ({...prev, action: e.target.value}))}><option value="">All Actions</option>{uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}</select>
                             </div>
                         </div>
-
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-left text-sm">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b">
-                                        <th className="p-3">Date</th>
-                                        <th className="p-3">Name</th>
-                                        <th className="p-3">Action</th>
-                                        <th className="p-3 text-right">Amount</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr className="bg-gray-50 border-b"><th className="p-3">Date</th><th className="p-3">Name</th><th className="p-3">Action</th><th className="p-3 text-right">Amount</th></tr></thead>
                                 <tbody>
-                                    {currentData.length === 0 && (
-                                        <tr>
-                                            <td colSpan="4" className="p-4 text-center text-gray-400">No records match filters.</td>
-                                        </tr>
-                                    )}
+                                    {currentData.length === 0 && <tr><td colSpan="4" className="p-4 text-center text-gray-400">No records match filters.</td></tr>}
                                     {currentData.map((t, idx) => (
                                         <React.Fragment key={idx}>
                                             <tr className="border-b hover:bg-gray-50">
-                                                <td className="p-3 whitespace-nowrap align-top">
-                                                    {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                                                </td>
-                                                <td className="p-3 align-top">
-                                                    <div className="font-medium">{t.name}</div>
-                                                    {t.notes && (
-                                                        <div className="text-[10px] text-gray-500 italic mt-1 leading-tight flex items-start gap-1">
-                                                            <span>•</span> {t.notes}
-                                                        </div>
-                                                    )}
-                                                </td>
+                                                <td className="p-3 whitespace-nowrap align-top">{new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                                                <td className="p-3 align-top"><div className="font-medium">{t.name}</div>{t.notes && (<div className="text-[10px] text-gray-500 italic mt-1 leading-tight flex items-start gap-1"><span>•</span> {t.notes}</div>)}</td>
                                                 <td className="p-3 text-xs align-top">{t.action}</td>
                                                 <td className="p-3 text-right font-mono align-top">{t.amount}</td>
                                             </tr>
@@ -802,27 +477,11 @@
                                 </tbody>
                             </table>
                         </div>
-
-                        {/* Pagination Controls */}
                         {filteredTransactions.length > ITEMS_PER_PAGE && (
                             <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
-                                <button 
-                                    onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                                    disabled={historyPage === 1}
-                                    className={`px-3 py-1 rounded text-sm font-medium ${historyPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
-                                >
-                                    Previous
-                                </button>
-                                <span className="text-xs text-gray-500 font-medium">
-                                    Page {historyPage} of {totalPages}
-                                </span>
-                                <button 
-                                    onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={historyPage === totalPages}
-                                    className={`px-3 py-1 rounded text-sm font-medium ${historyPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
-                                >
-                                    Next
-                                </button>
+                                <button onClick={() => setHistoryPage(p => Math.max(1, p - 1))} disabled={historyPage === 1} className={`px-3 py-1 rounded text-sm font-medium ${historyPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}>Previous</button>
+                                <span className="text-xs text-gray-500 font-medium">Page {historyPage} of {totalPages}</span>
+                                <button onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))} disabled={historyPage === totalPages} className={`px-3 py-1 rounded text-sm font-medium ${historyPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}>Next</button>
                             </div>
                         )}
                     </div>
@@ -830,36 +489,22 @@
             };
 
             // --- AUTH CHECKER ---
-            if (loading) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                        <div className="spinner"></div>
-                    </div>
-                );
-            }
-
-            if (!isAuthenticated) {
-                return <LoginScreen onUnlock={handleUnlock} />;
-            }
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="spinner"></div></div>;
+            if (!isAuthenticated) return <LoginScreen onUnlock={handleUnlock} />;
 
             // --- MAIN SWITCH ---
             return (
                 <div className="max-w-md mx-auto min-h-screen flex flex-col">
-                    <header className="bg-white p-4 shadow-sm sticky top-0 z-10">
-                        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <i data-lucide="home" className="text-blue-600"></i> HouseHelp
-                        </h1>
-                    </header>
+                    <header className="bg-white p-4 shadow-sm sticky top-0 z-10"><h1 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i data-lucide="home" className="text-blue-600"></i> HouseHelp</h1></header>
                     <main className="flex-1 p-4">
                         {view === 'dashboard' && renderDashboard()}
                         {view === 'add_transaction' && renderTransactionForm()}
                         {view === 'helpers' && renderHelpersManager()}
                         {view === 'history' && renderHistory()}
+                        {view === 'shopping' && renderShopping()}
                         {view === 'calculator' && <Calculator onBack={() => setView('dashboard')} />}
                     </main>
-                    <footer className="p-6 text-center text-xs text-gray-400 font-medium">
-                        Made with <span className="text-red-500 text-sm">♥</span> for Gangwals
-                    </footer>
+                    <footer className="p-6 text-center text-xs text-gray-400 font-medium">Made with <span className="text-red-500 text-sm">♥</span> for Gangwals</footer>
                 </div>
             );
         }
