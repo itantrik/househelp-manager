@@ -162,6 +162,7 @@
             const [helperForm, setHelperForm] = useState({ name: '', type: 'Monthly', defaultAmount: '' });
             // Shopping Form
             const [shoppingInput, setShoppingInput] = useState('');
+            const shoppingInputRef = useRef(null); // Ref for input focus
 
             // --- EFFECTS ---
             useEffect(() => { if (WEB_APP_URL) fetchData(); }, [refreshTrigger]);
@@ -170,8 +171,8 @@
             useEffect(() => { setHistoryPage(1); }, [historyFilters]);
 
             // --- API ACTIONS ---
-            const fetchData = async () => {
-                setLoading(true);
+            const fetchData = async (silent = false) => {
+                if (!silent) setLoading(true);
                 try {
                     const response = await fetch(WEB_APP_URL);
                     const data = await response.json();
@@ -180,7 +181,7 @@
                         const allHelpers = data.data.helpers || [];
                         const adminHelper = allHelpers.find(h => h.name === '__ADMIN__');
                         setHelpers(allHelpers.filter(h => h.name !== '__ADMIN__'));
-                        setShoppingList(data.data.shopping || []); // Get shopping list
+                        setShoppingList(data.data.shopping || []); 
 
                         if (adminHelper && adminHelper.amount) {
                             setAuthPassword(adminHelper.amount.toString());
@@ -188,7 +189,7 @@
                         } else { setIsAuthenticated(true); }
                     }
                 } catch (error) { console.error("Error fetching data", error); }
-                setLoading(false);
+                if (!silent) setLoading(false);
             };
 
             const checkSession = (password) => {
@@ -209,7 +210,8 @@
 
             const submitData = async (payloadObj) => {
                 if (!WEB_APP_URL) return;
-                // Optimistic UI updates for shopping are handled in handleShoppingSubmit/Toggle
+                
+                // Do not show global loading spinner for shopping actions
                 if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
                     setLoading(true);
                 }
@@ -223,12 +225,14 @@
                         setSuccessMsg("Saved successfully! ✅");
                         setTimeout(() => setSuccessMsg(''), 3000);
                         if(payloadObj.method === 'add_transaction') setFormData(prev => ({ ...prev, amount: '', notes: '' }));
-                    } else {
-                        // Silent refresh for shopping to sync IDs/Dates properly
-                        fetchData(); 
-                    }
+                    } 
+                    // NOTE: We do NOT fetch data after shopping items to prevent latency/overwriting. 
+                    // Optimistic UI handles the view.
                 } catch (error) { console.error(error); alert("Save failed"); setLoading(false); }
-                if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') setLoading(false);
+                
+                if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
+                    setLoading(false);
+                }
             };
 
             // --- HANDLERS ---
@@ -249,6 +253,8 @@
                 
                 submitData({ method: 'add_shopping_item', item: shoppingInput });
                 setShoppingInput('');
+                // Keep focus
+                if(shoppingInputRef.current) shoppingInputRef.current.focus();
             };
 
             const toggleShoppingItem = (item) => {
@@ -275,6 +281,7 @@
                         {/* Add Item */}
                         <form onSubmit={handleShoppingSubmit} className="mb-6 relative">
                             <input 
+                                ref={shoppingInputRef}
                                 type="text" 
                                 className="w-full p-4 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
                                 placeholder="Add item (e.g. Milk)..."
@@ -495,7 +502,21 @@
             // --- MAIN SWITCH ---
             return (
                 <div className="max-w-md mx-auto min-h-screen flex flex-col">
-                    <header className="bg-white p-4 shadow-sm sticky top-0 z-10"><h1 className="text-xl font-bold text-gray-800 flex items-center gap-2"><i data-lucide="home" className="text-blue-600"></i> HouseHelp</h1></header>
+                    <header className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
+                        <div 
+                            className="text-xl font-bold text-gray-800 flex items-center gap-2 cursor-pointer select-none"
+                            onClick={() => setView('dashboard')}
+                        >
+                            <i data-lucide="home" className="text-blue-600"></i> HouseHelp
+                        </div>
+                        <button 
+                            onClick={() => setView('shopping')}
+                            className={`p-2 rounded-full transition-colors ${view === 'shopping' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+                            aria-label="Shopping List"
+                        >
+                            <i data-lucide="shopping-bag" size={24}></i>
+                        </button>
+                    </header>
                     <main className="flex-1 p-4">
                         {view === 'dashboard' && renderDashboard()}
                         {view === 'add_transaction' && renderTransactionForm()}
