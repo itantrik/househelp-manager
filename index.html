@@ -287,6 +287,9 @@
                 submitData({ method: 'toggle_shopping_item', item: item.item, date: item.date });
             };
 
+            // Calculate Shopping Count
+            const openShoppingCount = shoppingList.filter(i => i.status === 'Open').length;
+
             // --- RENDERERS ---
             const renderShopping = () => {
                 const openItems = shoppingList.filter(i => i.status === 'Open');
@@ -530,10 +533,15 @@
                         </div>
                         <button 
                             onClick={() => setView('shopping')}
-                            className={`p-2 rounded-full transition-colors ${view === 'shopping' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+                            className={`relative p-2 rounded-full transition-colors ${view === 'shopping' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
                             aria-label="Shopping List"
                         >
                             <i data-lucide="shopping-bag" size={24}></i>
+                            {openShoppingCount > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[1.25rem] flex items-center justify-center rounded-full border-2 border-white px-1">
+                                    {openShoppingCount}
+                                </span>
+                            )}
                         </button>
                     </header>
                     <main className="flex-1 p-4">
