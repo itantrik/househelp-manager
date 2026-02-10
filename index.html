@@ -183,7 +183,7 @@
             const shoppingInputRef = useRef(null); // Ref for input focus
 
             // --- EFFECTS ---
-            useEffect(() => { if (WEB_APP_URL) fetchData(); }, [refreshTrigger]);
+            useEffect(() => { if (WEB_APP_URL) fetchData(refreshTrigger > 0); }, [refreshTrigger]);
             useEffect(() => { lucide.createIcons(); }, [view, transactions, helpers, shoppingList, isShoppingExpanded, expandedHelpers]);
             useEffect(() => { setSuccessMsg(''); }, [view]);
             useEffect(() => { setHistoryPage(1); }, [historyFilters]);
