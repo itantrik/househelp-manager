@@ -50,6 +50,11 @@
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .strike-through { text-decoration: line-through; color: #6b7280; /* gray-500 */ }
+        
+        /* Custom Scrollbar for mini-ledger */
+        .mini-scroll::-webkit-scrollbar { width: 4px; }
+        .mini-scroll::-webkit-scrollbar-track { background: transparent; }
+        .mini-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -166,7 +171,7 @@
             const [loading, setLoading] = useState(true);
             const [transactions, setTransactions] = useState([]);
             const [helpers, setHelpers] = useState([]);
-            const [shoppingList, setShoppingList] = useState([]); // New Shopping State
+            const [taskList, setTaskList] = useState([]); // Task List State
             const [refreshTrigger, setRefreshTrigger] = useState(0);
             const [successMsg, setSuccessMsg] = useState('');
             
@@ -176,7 +181,7 @@
             const [expandedHelpers, setExpandedHelpers] = useState({}); 
             const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); 
             const [historyPage, setHistoryPage] = useState(1); 
-            const [isShoppingExpanded, setIsShoppingExpanded] = useState(false); // Collapsed completed items
+            const [isTasksExpanded, setIsTasksExpanded] = useState(false); // Collapsed completed items
             const ITEMS_PER_PAGE = 20;
             const [dashboardDate, setDashboardDate] = useState(new Date());
 
@@ -184,13 +189,13 @@
             const [formData, setFormData] = useState({ type: 'Monthly', name: '', action: 'Payment/Advance', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
             // Helper Form
             const [helperForm, setHelperForm] = useState({ name: '', type: 'Monthly', defaultAmount: '' });
-            // Shopping Form
-            const [shoppingInput, setShoppingInput] = useState('');
-            const shoppingInputRef = useRef(null); // Ref for input focus
+            // Task Form
+            const [taskInput, setTaskInput] = useState('');
+            const taskInputRef = useRef(null); // Ref for input focus
 
             // --- EFFECTS ---
             useEffect(() => { if (WEB_APP_URL) fetchData(refreshTrigger > 0); }, [refreshTrigger]);
-            useEffect(() => { lucide.createIcons(); }, [view, transactions, helpers, shoppingList, isShoppingExpanded, expandedHelpers]);
+            useEffect(() => { lucide.createIcons(); }, [view, transactions, helpers, taskList, isTasksExpanded, expandedHelpers]);
             useEffect(() => { setSuccessMsg(''); }, [view]);
             useEffect(() => { setHistoryPage(1); }, [historyFilters]);
 
@@ -205,7 +210,7 @@
                         const allHelpers = data.data.helpers || [];
                         const adminHelper = allHelpers.find(h => h.name === '__ADMIN__');
                         setHelpers(allHelpers.filter(h => h.name !== '__ADMIN__'));
-                        setShoppingList(data.data.shopping || []); 
+                        setTaskList(data.data.shopping || []); 
 
                         if (adminHelper && adminHelper.amount) {
                             setAuthPassword(adminHelper.amount.toString());
@@ -233,12 +238,12 @@
             };
 
             const submitData = async (payloadObj) => {
-                if (!WEB_APP_URL) return;
+                if (!WEB_APP_URL) return false;
                 
                 // Clear success message on new submission
                 setSuccessMsg('');
 
-                // Do not show global loading spinner for shopping actions
+                // Do not show global loading spinner for task actions
                 if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
                     setLoading(true);
                 }
@@ -250,73 +255,88 @@
                     if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
                         setRefreshTrigger(prev => prev + 1);
                         setSuccessMsg("Saved successfully! ✅");
-                        // Persistent message, removed timeout
                         if(payloadObj.method === 'add_transaction') setFormData(prev => ({ ...prev, amount: '', notes: '' }));
                     } 
-                    // NOTE: We do NOT fetch data after shopping items to prevent latency/overwriting. 
-                    // Optimistic UI handles the view.
-                } catch (error) { console.error(error); alert("Save failed"); setLoading(false); }
+                } catch (error) { 
+                    console.error(error); 
+                    alert("Save failed"); 
+                    setLoading(false); 
+                    return false; 
+                }
                 
                 if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
                     setLoading(false);
                 }
+                return true;
             };
 
             // --- HANDLERS ---
-            const handleTransactionSubmit = (e) => { e.preventDefault(); submitData({ ...formData, method: 'add_transaction' }); };
+            const handleTransactionAction = async (goHome) => {
+                if (!formData.name || !formData.amount) {
+                    alert("Please complete the required fields (Helper, Amount).");
+                    return;
+                }
+                const success = await submitData({ ...formData, method: 'add_transaction' });
+                if (success && goHome) {
+                    setView('dashboard');
+                    setSuccessMsg(''); // Clear success message from screen when going home
+                    window.scrollTo(0, 0);
+                }
+            };
+
             const handleHelperSubmit = (e) => { e.preventDefault(); if(!helperForm.name) return; submitData({ ...helperForm, method: 'add_helper' }); setHelperForm({ name: '', type: 'Monthly', defaultAmount: '' }); setView('helpers'); };
             const handleHelperSelect = (e) => { 
                 const h = helpers.find(h => h.name === e.target.value);
                 setFormData(prev => ({ ...prev, name: e.target.value, type: h ? h.type : prev.type, amount: h ? (h.amount || '') : prev.amount })); 
             };
             
-            // Shopping Handlers
-            const handleShoppingSubmit = (e) => {
+            // Task Handlers (Backend uses "shopping" mapping to keep scripts untouched)
+            const handleTaskSubmit = (e) => {
                 e.preventDefault();
-                if (!shoppingInput.trim()) return;
+                if (!taskInput.trim()) return;
                 
-                const tempItem = { date: new Date().toISOString(), item: shoppingInput, status: 'Open' };
-                setShoppingList([...shoppingList, tempItem]); // Optimistic Add
+                const tempItem = { date: new Date().toISOString(), item: taskInput, status: 'Open' };
+                setTaskList([...taskList, tempItem]); // Optimistic Add
                 
-                submitData({ method: 'add_shopping_item', item: shoppingInput });
-                setShoppingInput('');
+                submitData({ method: 'add_shopping_item', item: taskInput });
+                setTaskInput('');
                 // Keep focus
-                if(shoppingInputRef.current) shoppingInputRef.current.focus();
+                if(taskInputRef.current) taskInputRef.current.focus();
             };
 
-            const toggleShoppingItem = (item) => {
-                const updatedList = shoppingList.map(i => 
+            const toggleTaskItem = (item) => {
+                const updatedList = taskList.map(i => 
                     (i.item === item.item && i.date === item.date) ? { ...i, status: i.status === 'Open' ? 'Done' : 'Open' } : i
                 );
-                setShoppingList(updatedList); // Optimistic Toggle
+                setTaskList(updatedList); // Optimistic Toggle
                 
                 submitData({ method: 'toggle_shopping_item', item: item.item, date: item.date });
             };
 
-            // Calculate Shopping Count
-            const openShoppingCount = shoppingList.filter(i => i.status === 'Open').length;
+            // Calculate Task Count
+            const openTasksCount = taskList.filter(i => i.status === 'Open').length;
 
             // --- RENDERERS ---
-            const renderShopping = () => {
-                const openItems = shoppingList.filter(i => i.status === 'Open');
-                const doneItems = shoppingList.filter(i => i.status === 'Done');
+            const renderTasks = () => {
+                const openItems = taskList.filter(i => i.status === 'Open');
+                const doneItems = taskList.filter(i => i.status === 'Done');
 
                 return (
                     <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in min-h-[500px]">
                         <div className="flex items-center mb-6">
                             <button onClick={() => setView('dashboard')} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button>
-                            <h2 className="text-xl font-bold text-gray-100">Shopping List</h2>
+                            <h2 className="text-xl font-bold text-gray-100">Task List</h2>
                         </div>
 
                         {/* Add Item */}
-                        <form onSubmit={handleShoppingSubmit} className="mb-6 relative">
+                        <form onSubmit={handleTaskSubmit} className="mb-6 relative">
                             <input 
-                                ref={shoppingInputRef}
+                                ref={taskInputRef}
                                 type="text" 
                                 className="w-full p-4 pr-12 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
-                                placeholder="Add item (e.g. Milk)..."
-                                value={shoppingInput}
-                                onChange={e => setShoppingInput(e.target.value)}
+                                placeholder="Add task..."
+                                value={taskInput}
+                                onChange={e => setTaskInput(e.target.value)}
                                 autoFocus
                             />
                             <button type="submit" className="absolute right-3 top-3 p-1 text-blue-400 bg-blue-500/20 rounded-full hover:bg-blue-500/30 transition">
@@ -326,9 +346,9 @@
 
                         {/* Open Items */}
                         <div className="space-y-2 mb-6">
-                            {openItems.length === 0 && <p className="text-center text-gray-500 py-4 italic">Everything bought! 🎉</p>}
+                            {openItems.length === 0 && <p className="text-center text-gray-500 py-4 italic">All tasks completed! 🎉</p>}
                             {openItems.map((item, idx) => (
-                                <div key={idx} onClick={() => toggleShoppingItem(item)} className="flex items-center p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-sm cursor-pointer hover:bg-gray-700 transition select-none group">
+                                <div key={idx} onClick={() => toggleTaskItem(item)} className="flex items-center p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-sm cursor-pointer hover:bg-gray-700 transition select-none group">
                                     <div className="w-5 h-5 rounded border-2 border-gray-500 mr-3 group-hover:border-blue-400"></div>
                                     <span className="text-gray-200 font-medium">{item.item}</span>
                                 </div>
@@ -339,17 +359,17 @@
                         {doneItems.length > 0 && (
                             <div className="border-t border-gray-700 pt-4">
                                 <button 
-                                    onClick={() => setIsShoppingExpanded(!isShoppingExpanded)}
+                                    onClick={() => setIsTasksExpanded(!isTasksExpanded)}
                                     className="flex items-center text-gray-400 text-sm font-bold mb-3 hover:text-gray-300 transition"
                                 >
-                                    <i data-lucide={isShoppingExpanded ? "chevron-down" : "chevron-right"} size={16} className="mr-1"></i>
+                                    <i data-lucide={isTasksExpanded ? "chevron-down" : "chevron-right"} size={16} className="mr-1"></i>
                                     Completed ({doneItems.length})
                                 </button>
                                 
-                                {isShoppingExpanded && (
+                                {isTasksExpanded && (
                                     <div className="space-y-2 fade-in">
                                         {doneItems.map((item, idx) => (
-                                            <div key={idx} onClick={() => toggleShoppingItem(item)} className="flex items-center p-2 opacity-60 cursor-pointer hover:opacity-100 transition">
+                                            <div key={idx} onClick={() => toggleTaskItem(item)} className="flex items-center p-2 opacity-60 cursor-pointer hover:opacity-100 transition">
                                                 <div className="w-5 h-5 rounded bg-green-900/30 border border-green-700 mr-3 flex items-center justify-center text-green-400">
                                                     <i data-lucide="check" size={12}></i>
                                                 </div>
@@ -366,10 +386,15 @@
 
             const renderDashboard = () => {
                 const currentMonthValue = `${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`;
-                // ... (existing calc logic same as before) ...
+                
+                // Helper Stats Calculation with specific month transactions included
                 const helperStats = helpers.map(helper => {
                     const myTx = transactions.filter(t => t.name === helper.name);
-                    const thisMonthTx = myTx.filter(t => { const d = new Date(t.date); return d.getMonth() === dashboardDate.getMonth() && d.getFullYear() === dashboardDate.getFullYear(); });
+                    const thisMonthTx = myTx.filter(t => { 
+                        const d = new Date(t.date); 
+                        return d.getMonth() === dashboardDate.getMonth() && d.getFullYear() === dashboardDate.getFullYear(); 
+                    });
+                    
                     let due = 0, paid = 0;
                     if (helper.type === 'Monthly') {
                         due = thisMonthTx.filter(t => t.action === 'Salary Due').reduce((a, c) => a + parseFloat(c.amount||0), 0);
@@ -378,19 +403,47 @@
                         due = thisMonthTx.filter(t => t.action === 'Work Logged').reduce((a, c) => a + parseFloat(c.amount||0), 0);
                         paid = thisMonthTx.filter(t => t.action === 'Payment').reduce((a, c) => a + parseFloat(c.amount||0), 0);
                     }
+                    
                     const totalDue = myTx.filter(t => t.action === 'Salary Due' || t.action === 'Work Logged').reduce((a, c) => a + parseFloat(c.amount||0), 0);
                     const totalPaid = myTx.filter(t => t.action === 'Payment/Advance' || t.action === 'Payment').reduce((a, c) => a + parseFloat(c.amount||0), 0);
-                    return { ...helper, monthDue: due, monthPaid: paid, overallBalance: totalDue - totalPaid, totalPaidAllTime: totalPaid };
+                    
+                    return { 
+                        ...helper, 
+                        monthDue: due, 
+                        monthPaid: paid, 
+                        overallBalance: totalDue - totalPaid, 
+                        totalPaidAllTime: totalPaid,
+                        thisMonthTx // Includes exact records to render history snippet
+                    };
                 });
+                
                 const grandTotalPaid = helperStats.reduce((acc, curr) => acc + curr.totalPaidAllTime, 0);
 
                 return (
                     <div className="space-y-4 fade-in">
                         {!WEB_APP_URL && <div className="bg-red-900/30 p-4 rounded-xl border border-red-800 text-red-400 text-sm mb-4"><strong>Config Needed:</strong> Paste URL in code.</div>}
+                        
                         <div className="flex justify-between items-center mb-2">
                             <h2 className="text-xl font-bold text-gray-100">Dashboard</h2>
                             <input type="month" value={currentMonthValue} onChange={e => { if(e.target.value) { const [y,m] = e.target.value.split('-'); setDashboardDate(new Date(parseInt(y), parseInt(m)-1, 1)); }}} className="bg-gray-700 border border-gray-600 text-white text-sm font-bold rounded-lg p-2 shadow-sm" />
                         </div>
+
+                        {/* Prominent Task Button */}
+                        <button 
+                            onClick={() => setView('tasks')}
+                            className="w-full bg-blue-900/30 border border-blue-800/50 hover:bg-blue-800/40 p-4 rounded-xl shadow-sm flex items-center justify-between transition-colors mb-2 group"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="bg-blue-500/20 text-blue-400 p-2 rounded-lg group-hover:scale-110 transition-transform">
+                                    <i data-lucide="check-square" size={24}></i>
+                                </div>
+                                <div className="text-left">
+                                    <div className="font-bold text-lg text-blue-100 leading-tight">Tasks</div>
+                                    <div className="text-xs font-medium text-blue-400">{openTasksCount} pending {openTasksCount === 1 ? 'task' : 'tasks'}</div>
+                                </div>
+                            </div>
+                            <i data-lucide="chevron-right" size={20} className="text-gray-500 group-hover:text-blue-400 transition-colors"></i>
+                        </button>
 
                         {/* Helpers Cards */}
                         <div className="space-y-3">
@@ -412,14 +465,38 @@
                                         {isExpanded && (
                                             <div className="px-5 pb-5 pt-0 border-t border-gray-700 animate-fade-in-down">
                                                 <div className="h-4"></div>
-                                                <div className="bg-gray-900 p-3 rounded-lg flex justify-between items-center text-sm mb-3">
-                                                    <div><div className="text-gray-400 text-xs">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-gray-100">{h.monthDue}</div></div>
-                                                    <div className="text-gray-600">|</div>
-                                                    <div className="text-right"><div className="text-gray-400 text-xs">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-green-400">{h.monthPaid}</div></div>
+                                                
+                                                {/* Action Buttons Moved to Top */}
+                                                <div className="flex gap-2 mb-4">
+                                                     <button onClick={(e) => { e.stopPropagation(); setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '' }); setView('add_transaction'); }} className="flex-1 py-3 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-500 shadow-sm transition">Pay</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '' }); setView('add_transaction'); }} className="flex-1 py-3 bg-gray-700 text-gray-200 text-xs font-bold rounded-lg hover:bg-gray-600 transition shadow-sm border border-gray-600">{h.type === 'Monthly' ? 'Add Due' : 'Log Work'}</button>
                                                 </div>
-                                                <div className="flex gap-2">
-                                                     <button onClick={(e) => { e.stopPropagation(); setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '' }); setView('add_transaction'); }} className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-500">Pay</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); setFormData({ ...formData, name: h.name, type: h.type, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '' }); setView('add_transaction'); }} className="flex-1 py-2 bg-gray-700 text-gray-200 text-xs font-bold rounded-lg hover:bg-gray-600">{h.type === 'Monthly' ? 'Add Due' : 'Log Work'}</button>
+                                                
+                                                {/* Monthly Ledger History Mini-View */}
+                                                {h.thisMonthTx && h.thisMonthTx.length > 0 && (
+                                                    <div className="mb-3 bg-gray-900 rounded-lg p-2 border border-gray-700 shadow-inner">
+                                                        <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1 font-semibold px-2 flex justify-between">
+                                                            <span className="w-12">Date</span>
+                                                            <span className="flex-1">Action</span>
+                                                            <span className="w-16 text-right">Amount</span>
+                                                        </div>
+                                                        <div className="space-y-1 max-h-40 overflow-y-auto pr-1 mini-scroll">
+                                                            {h.thisMonthTx.sort((a,b) => new Date(b.date) - new Date(a.date)).map((tx, idx) => (
+                                                                <div key={idx} className="flex justify-between items-center text-xs p-1.5 hover:bg-gray-800 rounded text-gray-300">
+                                                                    <span className="w-12 text-gray-500">{new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
+                                                                    <span className="flex-1 truncate px-2">{tx.action}</span>
+                                                                    <span className="font-mono text-gray-100 text-right w-16">{tx.amount}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Summary Moved to Bottom & Styled as Read-Only */}
+                                                <div className="bg-gray-900/50 p-3 rounded-lg flex justify-between items-center text-sm border border-gray-800 cursor-default select-none">
+                                                    <div><div className="text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-gray-400">₹{h.monthDue}</div></div>
+                                                    <div className="text-gray-700">|</div>
+                                                    <div className="text-right"><div className="text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-gray-400">₹{h.monthPaid}</div></div>
                                                 </div>
                                             </div>
                                         )}
@@ -446,13 +523,22 @@
             const renderTransactionForm = () => (
                 <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in">
                     <div className="flex items-center mb-6"><button onClick={() => setView('dashboard')} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Transaction</h2></div>
-                    <form onSubmit={handleTransactionSubmit} className="space-y-4">
+                    <form className="space-y-4">
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Helper</label><select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name} onChange={handleHelperSelect}><option value="">-- Select --</option>{helpers.map((h, i) => <option key={i} value={h.name}>{h.name}</option>)}</select></div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Action</label><select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>{formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>)}</select></div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Date</label><input type="date" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Notes</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Optional" /></div>
-                        <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500">{loading ? 'Saving...' : 'Save'}</button>
+                        
+                        <div className="flex gap-3 pt-2">
+                            <button type="button" onClick={() => handleTransactionAction(false)} disabled={loading} className="w-1/2 py-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-xl font-bold hover:bg-gray-600 transition shadow-sm">
+                                {loading ? 'Saving...' : 'Save'}
+                            </button>
+                            <button type="button" onClick={() => handleTransactionAction(true)} disabled={loading} className="w-1/2 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition shadow-lg">
+                                {loading ? 'Saving...' : 'Save & Home'}
+                            </button>
+                        </div>
+
                         {successMsg && <div className="mt-2 text-green-400 text-sm font-bold text-center bg-green-900/30 border border-green-800 p-2 rounded">{successMsg}</div>}
                     </form>
                 </div>
@@ -537,25 +623,13 @@
                         >
                             <i data-lucide="home" className="text-blue-500"></i> HouseHelp
                         </div>
-                        <button 
-                            onClick={() => setView('shopping')}
-                            className={`relative p-2 rounded-full transition-colors ${view === 'shopping' ? 'bg-blue-900/50 text-blue-400' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'}`}
-                            aria-label="Shopping List"
-                        >
-                            <i data-lucide="shopping-bag" size={24}></i>
-                            {openShoppingCount > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[1.25rem] flex items-center justify-center rounded-full border-2 border-gray-800 px-1">
-                                    {openShoppingCount}
-                                </span>
-                            )}
-                        </button>
                     </header>
                     <main className="flex-1 p-4">
                         {view === 'dashboard' && renderDashboard()}
                         {view === 'add_transaction' && renderTransactionForm()}
                         {view === 'helpers' && renderHelpersManager()}
                         {view === 'history' && renderHistory()}
-                        {view === 'shopping' && renderShopping()}
+                        {view === 'tasks' && renderTasks()}
                         {view === 'calculator' && <Calculator onBack={() => setView('dashboard')} />}
                     </main>
                     <footer className="p-6 text-center text-xs text-gray-500 font-medium">Made with <span className="text-red-500 text-sm">♥</span> for Gangwals</footer>
