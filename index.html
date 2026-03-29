@@ -205,7 +205,7 @@
             const [dashboardDate, setDashboardDate] = useState(new Date());
 
             // Forms
-            const [formData, setFormData] = useState({ type: 'Monthly', name: '', action: 'Payment/Advance', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+            const [formData, setFormData] = useState({ type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: '', tag: '', notes: '' });
             const [helperForm, setHelperForm] = useState({ name: '', type: 'Monthly', defaultAmount: '' });
             const [taskInput, setTaskInput] = useState('');
             const [expenseForm, setExpenseForm] = useState({ amount: '', merchant: '', category: '', date: new Date().toISOString().split('T')[0] });
@@ -284,7 +284,9 @@
                     if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
                         if (!skipRefresh) setRefreshTrigger(prev => prev + 1);
                         setSuccessMsg(payloadObj.method === 'delete_transaction' ? "Deleted successfully! 🗑️" : "Saved successfully! ✅");
-                        if(payloadObj.method === 'add_transaction') setFormData(prev => ({ ...prev, amount: '', notes: '' }));
+                        if(payloadObj.method === 'add_transaction') {
+                            setFormData(prev => ({ ...prev, amount: '', notes: '', name: '', category: '', tag: '' }));
+                        }
                     } 
                 } catch (error) { 
                     console.error(error); alert("Action failed"); 
@@ -309,13 +311,26 @@
             };
 
             const handleTransactionAction = async (goHome) => {
-                if (!formData.name || !formData.amount) { alert("Please complete required fields."); return; }
+                if (!formData.name || !formData.amount) { alert("Please complete required fields (Merchant/Helper & Amount)."); return; }
                 const success = await submitData({ ...formData, method: 'add_transaction' }, goHome);
                 if (success && goHome) {
                     await fetchData(false); // Force refresh
                     setView('dashboard');
                     window.scrollTo(0, 0);
                 }
+            };
+
+            const handleNameChange = (e) => {
+                const val = e.target.value;
+                const h = helpers.find(x => x.name === val);
+                // Auto-toggle to Househelp logic if name matches a known helper
+                setFormData(prev => ({
+                    ...prev, 
+                    name: val, 
+                    type: h ? h.type : 'General', 
+                    action: h ? (h.type === 'Monthly' ? 'Payment/Advance' : 'Payment') : 'Expense',
+                    amount: h ? (h.amount || '') : prev.amount
+                }));
             };
 
             const handleHelperSubmit = (e) => { 
@@ -583,9 +598,31 @@
                 <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in">
                     <div className="flex items-center mb-6"><button onClick={() => { setView('dashboard'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Transaction</h2></div>
                     <form className="space-y-4">
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Helper</label><select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name} onChange={handleHelperSelect}><option value="">-- Select --</option>{helpers.map((h, i) => <option key={i} value={h.name}>{h.name}</option>)}</select></div>
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Action</label><select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>{formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>)}</select></div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Helper / Merchant</label>
+                            <input type="text" list="helper-options" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name} onChange={handleNameChange} placeholder="Select Helper or type Merchant..." />
+                            <datalist id="helper-options">
+                                {helpers.map((h, i) => <option key={i} value={h.name} />)}
+                            </datalist>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Action</label>
+                            <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>
+                                {formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : formData.type === 'Weekly' ? (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>) : (<><option value="Expense">Expense</option><option value="Income">Income</option></>)}
+                            </select>
+                        </div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                            <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                                <option value="">-- Select Category --</option>
+                                {budgets.map(b => <option key={b.category} value={b.category}>{b.category}</option>)}
+                                <option value="Uncategorized">Uncategorized</option>
+                            </select>
+                        </div>
+                        
+                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Tag</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.tag} onChange={e => setFormData({...formData, tag: e.target.value})} placeholder="e.g. groceries" /></div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Date</label><input type="date" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Notes</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Optional" /></div>
                         
