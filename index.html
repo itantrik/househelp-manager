@@ -212,7 +212,9 @@
                 try {
                     const permission = await Notification.requestPermission();
                     if (permission === 'granted') {
-                        const token = await messaging.getToken(); 
+                        // FIX: Explicitly register the service worker via relative path to avoid 404s on GitHub Pages
+                        const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+                        const token = await messaging.getToken({ serviceWorkerRegistration: registration }); 
                         if (token) await submitData({ method: 'register_token', token: token }, true);
                     }
                 } catch (error) { console.log("Notification setup failed", error); }
@@ -270,18 +272,17 @@
             const handleTransactionAction = async (goHome) => {
                 if (!formData.name || !formData.amount) { alert("Please complete required fields (Merchant/Helper & Amount)."); return; }
                 
-                // If it's just an expense submitted from the unified form, natively add it to expenses!
                 if (formData.action === 'Expense') {
                     const success = await submitData({ method: 'add_expense', amount: formData.amount, merchant: formData.name, category: formData.category, date: formData.date }, goHome);
                     if (success && goHome) { await fetchData(false); setView('expenses'); window.scrollTo(0, 0); }
                     return;
                 }
 
-                // If it's a Househelp payment, the backend handles the Dual-Write logic to the Expenses sheet
                 const success = await submitData({ ...formData, method: 'add_transaction' }, goHome);
                 if (success && goHome) {
                     await fetchData(false);
-                    setView('househelp');
+                    if (formData.action === 'Income') setView('expenses');
+                    else setView('househelp');
                     window.scrollTo(0, 0);
                 }
             };
@@ -379,7 +380,7 @@
                         }
                     });
 
-                    // Confirmed Expenses from Expenses Sheet (which inherently includes auto-logged Househelp payments)
+                    // Confirmed Expenses from Expenses Sheet
                     expenses.forEach(e => {
                         if (!e.date || e.status === 'Review') return;
                         const exDate = new Date(e.date);
@@ -456,7 +457,6 @@
                 const currentMonth = dashboardDate.getMonth();
                 const currentYear = dashboardDate.getFullYear();
                 
-                // Display confirmed expenses from the unified list
                 const monthExpenses = expenses.filter(e => { 
                     const d = new Date(e.date); 
                     return d.getMonth() === currentMonth && d.getFullYear() === currentYear && e.status !== 'Review'; 
@@ -465,27 +465,8 @@
                 
                 const reviews = expenses.filter(e => e.status === 'Review');
 
-                if (view === 'add_expense') {
-                    return (
-                        <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
-                            <div className="flex items-center mb-6"><button onClick={() => setView('expenses')} className="mr-3 text-gray-400 hover:text-red-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Add Expense</h2></div>
-                            <form onSubmit={handleExpenseSubmit} className="space-y-4">
-                                <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} autoFocus placeholder="0.00"/></div>
-                                <div><label className="block text-sm font-medium text-gray-300 mb-1">Merchant</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.merchant} onChange={e => setExpenseForm({...expenseForm, merchant: e.target.value})} placeholder="e.g. Amazon"/></div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
-                                    <select className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}>
-                                        <option value="">-- Select Category --</option>
-                                        {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
-                                        <option value="Uncategorized">Uncategorized</option>
-                                    </select>
-                                </div>
-                                <div><label className="block text-sm font-medium text-gray-300 mb-1">Date</label><input type="date" className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})}/></div>
-                                <button type="submit" disabled={loading} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold mt-4 hover:bg-red-500 transition">{loading?'Saving...':'Save Expense'}</button>
-                            </form>
-                        </div>
-                    );
-                }
+                // FIX: Removed `if (view === 'add_expense')` block from here. 
+                // It is now rendered independently in the main switch.
 
                 return (
                     <div className="space-y-4 fade-in pb-20">
@@ -495,7 +476,6 @@
                             <input type="month" value={`${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`} onChange={e => { if(e.target.value) { const [y,m] = e.target.value.split('-'); setDashboardDate(new Date(parseInt(y), parseInt(m)-1, 1)); }}} className="bg-gray-800 border border-gray-700 text-white text-sm font-bold rounded-lg p-2 outline-none focus:ring-2 focus:ring-red-500" />
                         </div>
                         
-                        {/* REVIEW SECTION */}
                         {reviews.length > 0 && (
                             <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-4 shadow-sm mb-4">
                                 <div className="flex justify-between items-center mb-3">
@@ -537,7 +517,7 @@
                         <div className="bg-gradient-to-r from-red-800 to-red-950 p-6 rounded-xl shadow-lg border border-red-700/50">
                             <h3 className="text-red-200 text-sm font-medium mb-1">Total Confirmed Spent</h3>
                             <div className="text-4xl font-bold text-white mb-4">₹{totalSpent.toLocaleString()}</div>
-                            <button onClick={() => { setView('add_expense'); setExpenseForm({...expenseForm, amount: '', merchant: '', category: ''}); setSuccessMsg(''); }} className="w-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 text-red-100 py-2 rounded-lg font-bold transition flex justify-center items-center gap-2"><i data-lucide="plus" size={18}></i> Log Manual Expense</button>
+                            <button onClick={() => { setView('add_expense'); setExpenseForm({...expenseForm, amount: '', merchant: '', category: '', date: new Date().toISOString().split('T')[0]}); setSuccessMsg(''); }} className="w-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 text-red-100 py-2 rounded-lg font-bold transition flex justify-center items-center gap-2"><i data-lucide="plus" size={18}></i> Log Manual Expense</button>
                         </div>
                         
                         <div className="mt-4 mb-2">
@@ -573,6 +553,27 @@
                     </div>
                 );
             };
+
+            const renderAddExpenseForm = () => (
+                <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
+                    <div className="flex items-center mb-6"><button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-red-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Add Expense</h2></div>
+                    <form onSubmit={handleExpenseSubmit} className="space-y-4">
+                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} autoFocus placeholder="0.00"/></div>
+                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Merchant</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.merchant} onChange={e => setExpenseForm({...expenseForm, merchant: e.target.value})} placeholder="e.g. Amazon"/></div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                            <select className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}>
+                                <option value="">-- Select Category --</option>
+                                {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
+                                <option value="Uncategorized">Uncategorized</option>
+                            </select>
+                        </div>
+                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Date</label><input type="date" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-red-500 outline-none" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})}/></div>
+                        <button type="submit" disabled={loading} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold mt-4 hover:bg-red-500 transition">{loading?'Saving...':'Save Expense'}</button>
+                        {successMsg && <div className="mt-2 text-green-400 text-sm font-bold text-center bg-green-900/30 border border-green-800 p-2 rounded">{successMsg}</div>}
+                    </form>
+                </div>
+            );
 
             // --- VIEW: BUDGETS ---
             const renderBudgets = () => {
@@ -879,7 +880,7 @@
                             </div>
                         )}
                         
-                        {view === 'expenses' && renderExpenses()}
+                        {(view === 'expenses' || view === 'add_expense') && renderExpenses()}
                         {view === 'budgets' && renderBudgets()}
                         {view === 'tasks' && renderTasks()}
                         {view === 'househelp' && renderHousehelp()}
@@ -896,7 +897,7 @@
                     {isRootView && (
                         <nav className="bg-gray-800 border-t border-gray-700 pb-safe sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
                             <div className="flex justify-around items-center p-2">
-                                <button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'expenses' ? 'text-red-400' : 'text-gray-400 hover:text-gray-200'}`}>
+                                <button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'expenses' || view === 'add_expense' ? 'text-red-400' : 'text-gray-400 hover:text-gray-200'}`}>
                                     <i data-lucide="wallet" size={24}></i>
                                     {reviewExpensesCount > 0 && <span className="absolute top-1 right-1/4 translate-x-2 -translate-y-1 bg-yellow-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full border border-gray-800">{reviewExpensesCount}</span>}
                                     <span className="text-[10px] mt-1 font-medium">Expenses</span>
