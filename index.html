@@ -369,6 +369,7 @@
                     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
                     const m = d.getMonth();
                     const y = d.getFullYear();
+                    const label = d.toLocaleString('default', { month: 'short' });
                     
                     let exp = 0;
                     expenses.forEach(e => {
@@ -379,10 +380,10 @@
                         }
                     });
                     
-                    data.push({ exp });
+                    data.push({ exp, label });
                 }
                 const maxVal = Math.max(...data.map(d => d.exp), 1); 
-                return data.map(d => ({ expPct: (d.exp/maxVal)*100 }));
+                return data.map(d => ({ ...d, expPct: (d.exp/maxVal)*100 }));
             }, [expenses]);
 
             // --- RENDERERS ---
@@ -512,6 +513,25 @@
                             <button onClick={() => { setView('add_expense'); setExpenseForm({...expenseForm, amount: '', merchant: '', category: '', date: new Date().toISOString().split('T')[0]}); setSuccessMsg(''); }} className="w-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 text-red-100 py-2 rounded-lg font-bold transition flex justify-center items-center gap-2"><i data-lucide="plus" size={18}></i> Log Manual Expense</button>
                         </div>
                         
+                        {/* Spending Trend Card */}
+                        <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-sm mt-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold text-gray-100 text-sm">6-Month Trend</h3>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Spending per month</div>
+                            </div>
+                            <div className="flex items-end justify-between h-24 gap-2 mb-2 px-1">
+                                {trendData.map((d, i) => (
+                                    <div key={i} className="flex flex-col items-center flex-1 group relative">
+                                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity font-mono z-10 whitespace-nowrap">₹{Math.round(d.exp).toLocaleString()}</div>
+                                        <div className="w-full bg-red-500/20 rounded-t-lg relative overflow-hidden h-full">
+                                            <div className="absolute bottom-0 left-0 right-0 bg-red-500 rounded-t-lg transition-all duration-500 ease-out" style={{height: `${Math.max(d.expPct, 5)}%`}}></div>
+                                        </div>
+                                        <div className="text-[9px] text-gray-500 mt-2 font-bold uppercase">{d.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="mt-4 mb-2">
                             <button onClick={() => setView('budgets')} className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 p-4 rounded-xl shadow-sm flex items-center justify-between transition-colors group">
                                 <div className="flex items-center gap-3">
