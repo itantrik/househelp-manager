@@ -212,7 +212,6 @@
                 try {
                     const permission = await Notification.requestPermission();
                     if (permission === 'granted') {
-                        // FIX: Explicitly register the service worker via relative path to avoid 404s on GitHub Pages
                         const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
                         const token = await messaging.getToken({ serviceWorkerRegistration: registration }); 
                         if (token) await submitData({ method: 'register_token', token: token }, true);
@@ -281,8 +280,7 @@
                 const success = await submitData({ ...formData, method: 'add_transaction' }, goHome);
                 if (success && goHome) {
                     await fetchData(false);
-                    if (formData.action === 'Income') setView('expenses');
-                    else setView('househelp');
+                    setView('househelp');
                     window.scrollTo(0, 0);
                 }
             };
@@ -317,6 +315,10 @@
                 const updatedList = taskList.map(i => (i.item === item.item && i.date === item.date) ? { ...i, status: i.status === 'Open' ? 'Done' : 'Open' } : i );
                 setTaskList(updatedList); 
                 submitData({ method: 'toggle_shopping_item', item: item.item, date: item.date });
+            };
+
+            const handleDeleteTransaction = (t) => {
+                setTransactionToDelete(t);
             };
 
             // --- HANDLERS (EXPENSES) ---
@@ -368,19 +370,7 @@
                     const m = d.getMonth();
                     const y = d.getFullYear();
                     
-                    let inc = 0;
                     let exp = 0;
-                    
-                    // Income from Unified Transactions 
-                    transactions.forEach(t => {
-                        if (!t.date) return;
-                        const txDate = new Date(t.date);
-                        if (txDate.getMonth() === m && txDate.getFullYear() === y && t.action === 'Income') {
-                            inc += parseFloat(t.amount) || 0;
-                        }
-                    });
-
-                    // Confirmed Expenses from Expenses Sheet
                     expenses.forEach(e => {
                         if (!e.date || e.status === 'Review') return;
                         const exDate = new Date(e.date);
@@ -389,11 +379,11 @@
                         }
                     });
                     
-                    data.push({ inc, exp });
+                    data.push({ exp });
                 }
-                const maxVal = Math.max(...data.map(d => Math.max(d.inc, d.exp)), 1); 
-                return data.map(d => ({ incPct: (d.inc/maxVal)*100, expPct: (d.exp/maxVal)*100 }));
-            }, [transactions, expenses]);
+                const maxVal = Math.max(...data.map(d => d.exp), 1); 
+                return data.map(d => ({ expPct: (d.exp/maxVal)*100 }));
+            }, [expenses]);
 
             // --- RENDERERS ---
             const renderDeleteModal = () => {
@@ -464,9 +454,6 @@
                 const totalSpent = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
                 
                 const reviews = expenses.filter(e => e.status === 'Review');
-
-                // FIX: Removed `if (view === 'add_expense')` block from here. 
-                // It is now rendered independently in the main switch.
 
                 return (
                     <div className="space-y-4 fade-in pb-20">
@@ -561,28 +548,6 @@
                 );
             };
 
-            const renderAddExpenseForm = () => (
-                <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
-                    <div className="flex items-center mb-6"><button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-red-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Add Expense</h2></div>
-                    <form onSubmit={handleExpenseSubmit} className="space-y-4">
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} autoFocus placeholder="0.00"/></div>
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Merchant</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.merchant} onChange={e => setExpenseForm({...expenseForm, merchant: e.target.value})} placeholder="e.g. Amazon"/></div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
-                            <select className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-red-500" value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}>
-                                <option value="">-- Select Category --</option>
-                                {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
-                                <option value="Uncategorized">Uncategorized</option>
-                            </select>
-                        </div>
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Date</label><input type="date" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-red-500 outline-none" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})}/></div>
-                        <button type="submit" disabled={loading} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold mt-4 hover:bg-red-500 transition">{loading?'Saving...':'Save Expense'}</button>
-                        {successMsg && <div className="mt-2 text-green-400 text-sm font-bold text-center bg-green-900/30 border border-green-800 p-2 rounded">{successMsg}</div>}
-                    </form>
-                </div>
-            );
-
-            // --- VIEW: BUDGETS ---
             const renderBudgets = () => {
                 const currentMonth = dashboardDate.getMonth();
                 const currentYear = dashboardDate.getFullYear();
@@ -659,7 +624,6 @@
                 );
             };
 
-            // --- VIEW: HOUSEHELP ---
             const renderHousehelp = () => {
                 const currentMonthValue = `${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`;
                 const helperStats = helpers.map(helper => {
@@ -690,6 +654,7 @@
                             {!loading && helpers.length === 0 && <div className="text-center p-6 bg-gray-800 rounded-xl border border-dashed border-gray-700"><p className="text-gray-400 mb-2">No helpers.</p><button onClick={() => { setView('helpers'); setSuccessMsg(''); }} className="text-purple-400 font-bold">Add Helper</button></div>}
                             {helperStats.map((h, i) => {
                                 const isExpanded = !!expandedHelpers[h.name];
+                                const monthBalance = h.monthDue - h.monthPaid;
                                 return (
                                     <div key={i} className="bg-gray-800 rounded-xl shadow-md border border-gray-700 overflow-hidden transition-all duration-200">
                                         <div className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-700 transition-colors" onClick={() => setExpandedHelpers(prev => ({...prev, [h.name]: !prev[h.name]}))}>
@@ -698,7 +663,9 @@
                                                 <div><h3 className="font-bold text-lg text-gray-100">{h.name}</h3><span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">{h.type}</span></div>
                                             </div>
                                             <div className="text-right">
-                                                <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-400' : 'text-green-400'}`}>{h.overallBalance > 0 ? `-${h.overallBalance}` : `+${Math.abs(h.overallBalance)}`}</div>
+                                                <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                                    {h.overallBalance > 0 ? `-₹${h.overallBalance.toLocaleString()}` : `+₹${Math.abs(h.overallBalance).toLocaleString()}`}
+                                                </div>
                                                 <div className="text-[10px] text-gray-400 uppercase tracking-wide">Net Balance</div>
                                             </div>
                                         </div>
@@ -726,10 +693,17 @@
                                                         </div>
                                                     </div>
                                                 )}
-                                                <div className="bg-gray-900/50 p-3 rounded-lg flex justify-between items-center text-sm border border-gray-800 cursor-default select-none">
-                                                    <div><div className="text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-gray-400">₹{h.monthDue}</div></div>
-                                                    <div className="text-gray-700">|</div>
-                                                    <div className="text-right"><div className="text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-red-400">₹{h.monthPaid}</div></div>
+                                                <div className="bg-gray-900/50 p-3 rounded-lg flex flex-col gap-2 border border-gray-800 cursor-default select-none">
+                                                    <div className="flex justify-between items-center text-sm">
+                                                        <div><div className="text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Due ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-gray-400">₹{h.monthDue.toLocaleString()}</div></div>
+                                                        <div className="text-right"><div className="text-gray-500 text-[10px] uppercase tracking-wider mb-0.5">Paid ({dashboardDate.toLocaleString('default', { month: 'short' })})</div><div className="font-semibold text-red-400">₹{h.monthPaid.toLocaleString()}</div></div>
+                                                    </div>
+                                                    <div className="pt-2 border-t border-gray-800 flex justify-between items-center">
+                                                        <div className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Month's Balance</div>
+                                                        <div className={`font-mono text-sm font-bold ${monthBalance > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                                                            {monthBalance > 0 ? `-₹${monthBalance.toLocaleString()}` : `+₹${Math.abs(monthBalance).toLocaleString()}`}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
@@ -751,7 +725,6 @@
                 );
             };
 
-            // --- SUB-VIEWS ---
             const renderTransactionForm = () => (
                 <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
                     <div className="flex items-center mb-6"><button onClick={() => { setView(formData.type === 'General' ? 'expenses' : 'househelp'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Log Transaction</h2></div>
@@ -764,7 +737,7 @@
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-1">Action</label>
                             <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>
-                                {formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : formData.type === 'Weekly' ? (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>) : (<><option value="Expense">Expense</option><option value="Income">Income</option></>)}
+                                {formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : formData.type === 'Weekly' ? (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>) : (<><option value="Expense">Expense</option></>)}
                             </select>
                         </div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
@@ -828,10 +801,9 @@
                                 <tbody>
                                     {currentData.length === 0 && <tr><td colSpan="5" className="p-4 text-center text-gray-500">No records.</td></tr>}
                                     {currentData.map((t, idx) => {
-                                        const isIncome = t.action === 'Income';
                                         const isOutgoing = ['Expense', 'Payment', 'Payment/Advance'].includes(t.action);
-                                        const amountColor = isIncome ? 'text-green-400' : (isOutgoing ? 'text-red-400' : 'text-gray-300');
-                                        const amountPrefix = isIncome ? '+' : (isOutgoing ? '-' : '');
+                                        const amountColor = isOutgoing ? 'text-red-400' : 'text-gray-300';
+                                        const amountPrefix = isOutgoing ? '-' : '';
                                         
                                         return (
                                             <tr key={idx} className="border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
@@ -870,11 +842,10 @@
                             <i data-lucide="home" className="text-blue-500"></i> HouseOS
                         </div>
                         
-                        <div className="flex gap-1.5 items-end h-6" title="6-Month Income/Expense Trend">
+                        <div className="flex gap-1.5 items-end h-6" title="6-Month Expense Trend">
                             {trendData.map((d, i) => (
                                 <div key={i} className="flex gap-[1px] items-end h-full">
-                                    <div className="w-1.5 bg-green-500 rounded-t-[1px] opacity-80" style={{height: `${Math.max(d.incPct, 10)}%`}}></div>
-                                    <div className="w-1.5 bg-red-500 rounded-t-[1px] opacity-80" style={{height: `${Math.max(d.expPct, 10)}%`}}></div>
+                                    <div className="w-2.5 bg-red-500 rounded-t-[1px] opacity-80" style={{height: `${Math.max(d.expPct, 10)}%`}}></div>
                                 </div>
                             ))}
                         </div>
