@@ -133,7 +133,7 @@
             const [error, setError] = useState(false);
 
             const handleNumberClick = (num) => {
-                if (pin.length < 4) {
+                if (pin.length < 6) {
                     setPin(p => p + num);
                     setError(false);
                 }
@@ -160,8 +160,8 @@
                         <h2 className="text-2xl font-bold text-gray-100 mb-2">Welcome to HouseOS</h2>
                         <p className="text-gray-400 mb-8 text-sm">Enter secure PIN to continue</p>
                         
-                        <div className="flex gap-4 mb-8">
-                            {[1, 2, 3, 4].map(i => (
+                        <div className="flex gap-3 mb-8">
+                            {[1, 2, 3, 4, 5, 6].map(i => (
                                 <div key={i} className={`w-4 h-4 rounded-full border-2 transition-colors ${error ? 'border-red-500 bg-red-500/50' : pin.length >= i ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`}></div>
                             ))}
                         </div>
@@ -197,6 +197,7 @@
             const [taskList, setTaskList] = useState([]); 
             const [budgets, setBudgets] = useState([]);
             const [expenses, setExpenses] = useState([]);
+            const [income, setIncome] = useState([]); // NEW state for tracking Income records
             
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [authPassword, setAuthPassword] = useState(null);
@@ -205,8 +206,8 @@
             const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); 
             const [historyPage, setHistoryPage] = useState(1); 
             
-            // Filters for Expense History
-            const [expenseHistoryFilters, setExpenseHistoryFilters] = useState({ search: '', category: '', month: '' });
+            // Filters for Cashflow History
+            const [expenseHistoryFilters, setExpenseHistoryFilters] = useState({ search: '', category: '', month: '', type: 'All' });
             const [expenseHistoryPage, setExpenseHistoryPage] = useState(1);
 
             const [isTasksExpanded, setIsTasksExpanded] = useState(false); 
@@ -214,11 +215,14 @@
             
             const [expenseToEdit, setExpenseToEdit] = useState(null);
             const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+            
+            const [budgetFormOpen, setBudgetFormOpen] = useState(false);
+            const [budgetForm, setBudgetForm] = useState({ old_category: '', category: '', limit: '' });
 
             const ITEMS_PER_PAGE = 20;
             const [dashboardDate, setDashboardDate] = useState(new Date());
 
-            const [formData, setFormData] = useState({ type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: '', tag: '', notes: '' });
+            const [formData, setFormData] = useState({ type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: 'Uncategorized', tag: '', notes: '' });
             const [helperForm, setHelperForm] = useState({ name: '', type: 'Monthly', defaultAmount: '' });
             const [taskInput, setTaskInput] = useState('');
             const taskInputRef = useRef(null); 
@@ -243,6 +247,9 @@
                         
                         const loadedExpenses = data.data.expenses ? data.data.expenses.map(e => ({...e, id: e.id || Math.random().toString(36)})).sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
                         setExpenses(loadedExpenses);
+                        
+                        const loadedIncome = data.data.income ? data.data.income.map(i => ({...i, id: i.id || Math.random().toString(36)})).sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+                        setIncome(loadedIncome);
 
                         if (adminHelper && adminHelper.amount) {
                             setAuthPassword(adminHelper.amount.toString());
@@ -291,9 +298,9 @@
                     
                     if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
                         if (!skipRefresh) setRefreshTrigger(prev => prev + 1);
-                        setSuccessMsg(payloadObj.method === 'delete_transaction' || payloadObj.method === 'delete_expense' ? "Deleted successfully! 🗑️" : "Saved successfully! ✅");
+                        setSuccessMsg(payloadObj.method.includes('delete') ? "Deleted successfully! 🗑️" : "Saved successfully! ✅");
                         // Reset forms properly
-                        if(payloadObj.method === 'add_transaction' || payloadObj.method === 'add_expense') {
+                        if(payloadObj.method === 'add_transaction' || payloadObj.method === 'add_expense' || payloadObj.method === 'add_income') {
                             setFormData(prev => ({ ...prev, amount: '', notes: '', name: '', category: 'Uncategorized', tag: '' }));
                         }
                     } 
@@ -316,10 +323,14 @@
             };
 
             const handleTransactionAction = async (goHome) => {
-                if (!formData.name || !formData.amount) { alert("Please complete required fields (Merchant/Helper & Amount)."); return; }
+                if (!formData.name || !formData.amount) { alert("Please complete required fields (Merchant/Source & Amount)."); return; }
                 
                 if (formData.action === 'Expense') {
                     const success = await submitData({ method: 'add_expense', amount: formData.amount, merchant: formData.name, category: formData.category, date: formData.date }, goHome);
+                    if (success && goHome) { await fetchData(false); setView('expenses'); window.scrollTo(0, 0); }
+                    return;
+                } else if (formData.action === 'Income') {
+                    const success = await submitData({ method: 'add_income', amount: formData.amount, source: formData.name, category: formData.category, date: formData.date }, goHome);
                     if (success && goHome) { await fetchData(false); setView('expenses'); window.scrollTo(0, 0); }
                     return;
                 }
@@ -338,7 +349,7 @@
                 setFormData(prev => ({
                     ...prev, name: val, 
                     type: h ? h.type : 'General', 
-                    action: h ? (h.type === 'Monthly' ? 'Payment/Advance' : 'Payment') : 'Expense',
+                    action: h ? (h.type === 'Monthly' ? 'Payment/Advance' : 'Payment') : prev.action,
                     amount: h ? (h.amount || '') : prev.amount
                 }));
             };
@@ -368,7 +379,7 @@
                 setTransactionToDelete(t);
             };
 
-            // --- HANDLERS (EXPENSES) ---
+            // --- HANDLERS (EXPENSES & INCOME) ---
             const handleUpdateReviewExpense = (id, field, value) => {
                 setExpenses(expenses.map(e => e.id === id ? { ...e, [field]: value } : e));
             };
@@ -378,10 +389,15 @@
                 await submitData({ method: 'update_expense', id: expense.id, amount: expense.amount, merchant: expense.merchant, category: expense.category, status: 'Confirmed' }, true);
             };
 
-            const deleteExpense = async (id) => {
-                if(window.confirm("Delete this expense?")) {
-                    setExpenses(expenses.filter(e => e.id !== id));
-                    await submitData({ method: 'delete_expense', id: id }, true);
+            const deleteCashflowItem = async (id, type) => {
+                if(window.confirm(`Delete this ${type}?`)) {
+                    if (type === 'Expense') {
+                        setExpenses(expenses.filter(e => e.id !== id));
+                        await submitData({ method: 'delete_expense', id: id }, true);
+                    } else {
+                        setIncome(income.filter(i => i.id !== id));
+                        await submitData({ method: 'delete_income', id: id }, true);
+                    }
                 }
             };
 
@@ -393,6 +409,28 @@
                 const ids = reviews.map(e => e.id).join(',');
                 await submitData({ method: 'bulk_confirm_expenses', ids: ids }, true);
                 setIsReviewModalOpen(false);
+            };
+
+            // --- BUDGET MANAGER HANDLERS ---
+            const handleSaveBudget = async () => {
+                if (!budgetForm.category || !budgetForm.limit) return;
+                const method = budgetForm.old_category ? 'update_budget' : 'add_budget';
+                
+                if (budgetForm.old_category) {
+                    setBudgets(budgets.map(b => b.category === budgetForm.old_category ? { category: budgetForm.category, limit: budgetForm.limit } : b));
+                } else {
+                    setBudgets([...budgets, { category: budgetForm.category, limit: budgetForm.limit }]);
+                }
+
+                await submitData({ method, old_category: budgetForm.old_category, category: budgetForm.category, limit: budgetForm.limit }, true);
+                setBudgetFormOpen(false);
+            };
+
+            const handleDeleteBudget = async (category) => {
+                if(window.confirm(`Delete budget category: ${category}?`)) {
+                    setBudgets(budgets.filter(b => b.category !== category));
+                    await submitData({ method: 'delete_budget', category }, true);
+                }
             };
 
             // --- COMPUTED DATA ---
@@ -412,16 +450,21 @@
                     expenses.forEach(e => {
                         if (!e.date || e.status === 'Review') return;
                         const exDate = new Date(e.date);
-                        if (exDate.getMonth() === m && exDate.getFullYear() === y) {
-                            exp += parseFloat(e.amount) || 0;
-                        }
+                        if (exDate.getMonth() === m && exDate.getFullYear() === y) exp += parseFloat(e.amount) || 0;
+                    });
+
+                    let inc = 0;
+                    income.forEach(i => {
+                        if (!i.date || i.status === 'Review') return;
+                        const inDate = new Date(i.date);
+                        if (inDate.getMonth() === m && inDate.getFullYear() === y) inc += parseFloat(i.amount) || 0;
                     });
                     
-                    data.push({ exp, label, dateObj: d });
+                    data.push({ exp, inc, label, dateObj: d });
                 }
-                const maxVal = Math.max(...data.map(d => d.exp), 1); 
-                return data.map(d => ({ ...d, expPct: (d.exp/maxVal)*100 }));
-            }, [expenses]);
+                const maxVal = Math.max(...data.map(d => Math.max(d.exp, d.inc)), 1); 
+                return data.map(d => ({ ...d, expPct: (d.exp/maxVal)*100, incPct: (d.inc/maxVal)*100 }));
+            }, [expenses, income]);
 
             // --- RENDERERS ---
             const renderDeleteModal = () => {
@@ -481,7 +524,7 @@
                 );
             };
 
-            const renderExpenses = () => {
+            const renderFinances = () => {
                 const currentMonth = dashboardDate.getMonth();
                 const currentYear = dashboardDate.getFullYear();
                 
@@ -490,39 +533,56 @@
                     return d.getMonth() === currentMonth && d.getFullYear() === currentYear && e.status !== 'Review'; 
                 });
                 const totalSpent = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+
+                const monthIncome = income.filter(i => { 
+                    const d = new Date(i.date); 
+                    return d.getMonth() === currentMonth && d.getFullYear() === currentYear && i.status !== 'Review'; 
+                });
+                const totalIncome = monthIncome.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0);
                 
                 const reviews = expenses.filter(e => e.status === 'Review');
+
+                const combinedRecent = [
+                    ...monthExpenses.map(e => ({...e, type: 'Expense', party: e.merchant})),
+                    ...monthIncome.map(i => ({...i, type: 'Income', party: i.source}))
+                ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
                 return (
                     <div className="space-y-4 fade-in pb-20">
                         {successMsg && <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded-xl text-sm font-bold text-center animate-fade-in-down">{successMsg}</div>}
                         <div className="flex justify-between items-center mb-2">
-                            <h2 className="text-xl font-bold text-gray-100">Expenses</h2>
-                            <input type="month" value={`${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`} onChange={e => { if(e.target.value) { const [y,m] = e.target.value.split('-'); setDashboardDate(new Date(parseInt(y), parseInt(m)-1, 1)); }}} className="bg-gray-800 border border-gray-700 text-white text-sm font-bold rounded-lg p-2 outline-none focus:ring-2 focus:ring-red-500" />
+                            <h2 className="text-xl font-bold text-gray-100">Cashflow</h2>
+                            <input type="month" value={`${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`} onChange={e => { if(e.target.value) { const [y,m] = e.target.value.split('-'); setDashboardDate(new Date(parseInt(y), parseInt(m)-1, 1)); }}} className="bg-gray-800 border border-gray-700 text-white text-sm font-bold rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm" />
                         </div>
                         
-                        {/* Compact 6-Month Trend Graph */}
+                        {/* Compact 6-Month Trend Graph (Income vs Expense) */}
                         <div className="bg-gray-800/80 p-3 rounded-xl border border-gray-700/50 shadow-sm flex flex-col justify-between h-28">
                             <div className="flex justify-between items-center mb-2 px-1 text-[10px] text-gray-400 font-semibold tracking-wider uppercase">
                                 <span>6-Month Trend</span>
                                 <i data-lucide="bar-chart-2" size={14}></i>
                             </div>
-                            <div className="flex items-end justify-between h-full gap-1.5 px-1">
+                            <div className="flex items-end justify-between h-full gap-2 px-1">
                                 {trendData.map((d, i) => {
                                     const isActive = dashboardDate.getMonth() === d.dateObj.getMonth() && dashboardDate.getFullYear() === d.dateObj.getFullYear();
                                     return (
                                     <div key={i} onClick={() => setDashboardDate(d.dateObj)} className={`flex flex-col items-center flex-1 h-full justify-end group cursor-pointer transition-all ${isActive ? 'opacity-100 scale-105' : 'opacity-60 hover:opacity-100'}`}>
-                                        <div className={`text-[9px] font-mono mb-1 leading-none ${isActive ? 'text-red-300 font-bold' : 'text-gray-400'}`}>{d.exp >= 1000 ? `₹${Math.round(d.exp/1000)}k` : `₹${d.exp}`}</div>
-                                        <div className={`w-full rounded-t-sm relative overflow-hidden h-full flex items-end transition-colors ${isActive ? 'bg-red-500/20 ring-1 ring-red-500/50' : 'bg-red-500/10'}`}>
-                                            <div className={`w-full transition-all duration-500 ease-out rounded-t-sm ${isActive ? 'bg-red-400' : 'bg-red-500'}`} style={{height: `${Math.max(d.expPct, 5)}%`}}></div>
+                                        <div className="flex items-end h-full w-full gap-0.5 justify-center">
+                                            {/* Income Bar */}
+                                            <div className={`w-1/2 rounded-t-sm relative overflow-hidden h-full flex items-end transition-colors ${isActive ? 'bg-green-500/20' : 'bg-green-500/10'}`} title={`Income: ₹${d.inc}`}>
+                                                <div className={`w-full transition-all duration-500 ease-out rounded-t-sm ${isActive ? 'bg-green-400' : 'bg-green-500'}`} style={{height: `${Math.max(d.incPct, 5)}%`}}></div>
+                                            </div>
+                                            {/* Expense Bar */}
+                                            <div className={`w-1/2 rounded-t-sm relative overflow-hidden h-full flex items-end transition-colors ${isActive ? 'bg-red-500/20' : 'bg-red-500/10'}`} title={`Spent: ₹${d.exp}`}>
+                                                <div className={`w-full transition-all duration-500 ease-out rounded-t-sm ${isActive ? 'bg-red-400' : 'bg-red-500'}`} style={{height: `${Math.max(d.expPct, 5)}%`}}></div>
+                                            </div>
                                         </div>
-                                        <div className={`text-[9px] mt-1.5 font-bold uppercase leading-none ${isActive ? 'text-red-400' : 'text-gray-500'}`}>{d.label}</div>
+                                        <div className={`text-[9px] mt-1.5 font-bold uppercase leading-none ${isActive ? 'text-blue-400' : 'text-gray-500'}`}>{d.label}</div>
                                     </div>
                                 )})}
                             </div>
                         </div>
 
-                        {/* Review Logic: Inline for <= 3, Compact Info for > 3 */}
+                        {/* Review Logic */}
                         {reviews.length > 0 && (
                             <div className="bg-yellow-900/10 border border-yellow-700/30 rounded-xl p-3">
                                 <div className="flex justify-between items-center mb-3">
@@ -546,7 +606,7 @@
                                                         {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
                                                     </select>
                                                     <div className="flex gap-1.5">
-                                                        <button onClick={() => deleteExpense(r.id)} className="px-2.5 py-1.5 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition"><i data-lucide="trash-2" size={14}></i></button>
+                                                        <button onClick={() => deleteCashflowItem(r.id, 'Expense')} className="px-2.5 py-1.5 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition"><i data-lucide="trash-2" size={14}></i></button>
                                                         <button onClick={() => confirmReviewExpense(r)} className="px-2.5 py-1.5 bg-green-600 text-white rounded hover:bg-green-500 transition"><i data-lucide="check" size={14}></i></button>
                                                     </div>
                                                 </div>
@@ -559,14 +619,27 @@
                             </div>
                         )}
 
-                        <div className="bg-gradient-to-r from-red-800 to-red-950 p-6 rounded-xl shadow-lg border border-red-700/50">
-                            <h3 className="text-red-200 text-sm font-medium mb-1">Total Confirmed Spent</h3>
-                            <div className="text-4xl font-bold text-white mb-4">₹{totalSpent.toLocaleString()}</div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-sm flex flex-col">
+                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1"><i data-lucide="arrow-down-left" className="inline text-green-500" size={12}></i> Income</span>
+                                <span className="text-xl font-bold text-green-400">₹{totalIncome.toLocaleString()}</span>
+                            </div>
+                            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-sm flex flex-col">
+                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1"><i data-lucide="arrow-up-right" className="inline text-red-500" size={12}></i> Spent</span>
+                                <span className="text-xl font-bold text-red-400">₹{totalSpent.toLocaleString()}</span>
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-blue-900 to-gray-900 p-4 rounded-xl shadow-lg border border-blue-800/50">
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="text-blue-200 text-xs font-bold uppercase tracking-wider">Net Savings</h3>
+                                <div className="text-2xl font-bold text-white">₹{(totalIncome - totalSpent).toLocaleString()}</div>
+                            </div>
                             <button onClick={() => { 
                                 setFormData({ type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: 'Uncategorized', tag: '', notes: '' }); 
                                 setView('add_transaction'); 
                                 setSuccessMsg(''); 
-                            }} className="w-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 text-red-100 py-2 rounded-lg font-bold transition flex justify-center items-center gap-2"><i data-lucide="plus" size={18}></i> Log Manual Expense</button>
+                            }} className="w-full bg-blue-500/20 hover:bg-blue-500/40 border border-blue-500/50 text-blue-100 py-2.5 rounded-lg text-sm font-bold transition flex justify-center items-center gap-2"><i data-lucide="plus" size={16}></i> Log Cashflow Entry</button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mt-4 mb-2">
@@ -574,33 +647,32 @@
                                 <i data-lucide="pie-chart" size={16} className="text-blue-400 group-hover:scale-110 transition-transform"></i>
                                 Budgets
                             </button>
-                            <button onClick={() => { setView('expense_history'); setSuccessMsg(''); }} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-colors text-sm font-medium text-gray-200 group">
+                            <button onClick={() => { setView('cashflow_history'); setSuccessMsg(''); }} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-colors text-sm font-medium text-gray-200 group">
                                 <i data-lucide="history" size={16} className="text-blue-400 group-hover:scale-110 transition-transform"></i>
                                 History
                             </button>
                         </div>
                         
                         <div className="mt-6 mb-2 flex justify-between items-center text-xs text-gray-500 uppercase tracking-widest font-semibold px-1">
-                            <span>Recent Spending</span>
+                            <span>Recent Cashflow</span>
                         </div>
                         
-                        {/* Highly Compact Confirmed Spending List */}
                         <div className="space-y-1.5">
-                             {monthExpenses.length === 0 && <p className="text-center text-gray-600 text-sm italic py-4">No confirmed expenses this month.</p>}
-                             {monthExpenses.slice(0,15).map((e, i) => (
+                             {combinedRecent.length === 0 && <p className="text-center text-gray-600 text-sm italic py-4">No records this month.</p>}
+                             {combinedRecent.slice(0,15).map((item, i) => (
                                  <div key={i} className="flex justify-between items-center bg-gray-800 border border-gray-700/50 p-2 rounded-lg hover:bg-gray-750 transition">
                                      <div className="flex-1 min-w-0 pr-2 flex items-center gap-2.5">
-                                         <div className="text-[10px] text-gray-500 w-12 flex-shrink-0">{new Date(e.date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})}</div>
+                                         <div className="text-[10px] text-gray-500 w-12 flex-shrink-0">{new Date(item.date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})}</div>
                                          <div className="flex-1 min-w-0">
-                                             <div className="font-bold text-gray-200 text-xs truncate leading-tight">{e.merchant}</div>
-                                             <div className="text-[9px] text-gray-400 uppercase leading-tight mt-0.5">{e.category || 'Uncategorized'}</div>
+                                             <div className="font-bold text-gray-200 text-xs truncate leading-tight">{item.party}</div>
+                                             <div className="text-[9px] text-gray-400 uppercase leading-tight mt-0.5">{item.category || 'Uncategorized'}</div>
                                          </div>
                                      </div>
                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                         <div className="font-mono text-red-400 text-xs font-bold w-16 text-right">-₹{e.amount}</div>
+                                         <div className={`font-mono text-xs font-bold w-16 text-right ${item.type === 'Income' ? 'text-green-400' : 'text-red-400'}`}>{item.type === 'Income' ? '+' : '-'}₹{item.amount}</div>
                                          <div className="flex gap-1 border-l border-gray-700 pl-2">
-                                             <button onClick={() => setExpenseToEdit(e)} className="p-1.5 text-gray-500 hover:text-blue-400 transition rounded" title="Edit"><i data-lucide="edit-2" size={12}></i></button>
-                                             <button onClick={() => deleteExpense(e.id)} className="p-1.5 text-gray-500 hover:text-red-400 transition rounded" title="Delete"><i data-lucide="trash-2" size={12}></i></button>
+                                             <button onClick={() => setExpenseToEdit(item)} className="p-1.5 text-gray-500 hover:text-blue-400 transition rounded" title="Edit"><i data-lucide="edit-2" size={12}></i></button>
+                                             <button onClick={() => deleteCashflowItem(item.id, item.type)} className="p-1.5 text-gray-500 hover:text-red-400 transition rounded" title="Delete"><i data-lucide="trash-2" size={12}></i></button>
                                          </div>
                                      </div>
                                  </div>
@@ -632,10 +704,27 @@
 
                 return (
                     <div className="space-y-4 fade-in pb-20">
-                        <div className="flex items-center mb-6">
-                            <button onClick={() => setView('expenses')} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button>
-                            <h2 className="text-xl font-bold text-gray-100">Budget Analysis</h2>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center">
+                                <button onClick={() => setView('expenses')} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button>
+                                <h2 className="text-xl font-bold text-gray-100">Budget Manager</h2>
+                            </div>
+                            <button onClick={() => { setBudgetForm({old_category: '', category: '', limit: ''}); setBudgetFormOpen(true); }} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow"><i data-lucide="plus" size={14}></i> Add</button>
                         </div>
+
+                        {budgetFormOpen && (
+                            <div className="bg-gray-800 p-4 rounded-xl border border-blue-500/50 mb-6 shadow-lg fade-in">
+                                <h3 className="text-sm font-bold text-gray-200 mb-3">{budgetForm.old_category ? 'Edit Budget' : 'New Budget Category'}</h3>
+                                <div className="flex flex-col gap-3">
+                                    <div><label className="text-[10px] text-gray-400 uppercase">Category Name</label><input type="text" value={budgetForm.category} onChange={e => setBudgetForm({...budgetForm, category: e.target.value})} className="w-full p-2 bg-gray-900 border border-gray-700 text-white text-sm rounded outline-none focus:border-blue-500" placeholder="e.g. Groceries" /></div>
+                                    <div><label className="text-[10px] text-gray-400 uppercase">Monthly Limit</label><input type="number" value={budgetForm.limit} onChange={e => setBudgetForm({...budgetForm, limit: e.target.value})} className="w-full p-2 bg-gray-900 border border-gray-700 text-white text-sm rounded outline-none focus:border-blue-500" placeholder="e.g. 5000" /></div>
+                                    <div className="flex gap-2 mt-2">
+                                        <button onClick={() => setBudgetFormOpen(false)} className="flex-1 py-2 bg-gray-700 rounded text-xs font-bold text-gray-300">Cancel</button>
+                                        <button onClick={handleSaveBudget} className="flex-1 py-2 bg-blue-600 rounded text-xs font-bold text-white shadow">Save Budget</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700">
                             <h3 className="text-gray-400 text-sm font-medium mb-1">Total Budget Used</h3>
@@ -654,8 +743,12 @@
                                 const pct = Math.min((catSpent/limit)*100, 100);
                                 const remaining = limit - catSpent;
                                 return (
-                                    <div key={b.category} className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                                        <div className="flex justify-between items-end mb-2">
+                                    <div key={b.category} className="bg-gray-800 p-4 rounded-xl border border-gray-700 group relative">
+                                        <div className="absolute top-3 right-3 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
+                                            <button onClick={() => { setBudgetForm({old_category: b.category, category: b.category, limit: b.limit}); setBudgetFormOpen(true); }} className="text-gray-500 hover:text-blue-400"><i data-lucide="edit-2" size={14}></i></button>
+                                            <button onClick={() => handleDeleteBudget(b.category)} className="text-gray-500 hover:text-red-400"><i data-lucide="trash-2" size={14}></i></button>
+                                        </div>
+                                        <div className="flex justify-between items-end mb-2 pr-12">
                                             <div>
                                                 <div className="font-bold text-gray-200">{b.category}</div>
                                                 <div className="text-[10px] text-gray-500 mt-0.5">{remaining >= 0 ? `₹${remaining.toLocaleString()} left` : `₹${Math.abs(remaining).toLocaleString()} over`}</div>
@@ -678,7 +771,7 @@
                                         <span className="font-bold text-gray-200">Other / Uncategorized</span>
                                         <span className="text-red-400 font-mono">-₹{unbudgetedSpent.toLocaleString()}</span>
                                     </div>
-                                    <div className="text-[10px] text-gray-500 mt-1">Includes Househelp salaries and uncategorized manual entries not defined in your budget limits.</div>
+                                    <div className="text-[10px] text-gray-500 mt-1">Includes Househelp salaries and uncategorized entries not defined in your budget limits.</div>
                                 </div>
                             </div>
                         )}
@@ -686,68 +779,69 @@
                 );
             };
 
-            const renderExpenseHistory = () => {
-                const confirmedExpenses = expenses.filter(e => e.status === 'Confirmed');
-                const categoriesList = ['Uncategorized', ...budgets.map(b => b.category)];
-                
-                // Sort by date descending
-                confirmedExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            const renderCashflowHistory = () => {
+                const combinedAll = [
+                    ...expenses.filter(e => e.status === 'Confirmed').map(e => ({...e, type: 'Expense', party: e.merchant})),
+                    ...income.filter(i => i.status === 'Confirmed').map(i => ({...i, type: 'Income', party: i.source}))
+                ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-                const filtered = confirmedExpenses.filter(e => {
-                    const matchSearch = e.merchant.toLowerCase().includes(expenseHistoryFilters.search.toLowerCase()) || 
-                                        (e.amount && e.amount.toString().includes(expenseHistoryFilters.search));
-                    const matchCategory = expenseHistoryFilters.category ? e.category === expenseHistoryFilters.category : true;
-                    const matchMonth = expenseHistoryFilters.month ? e.date && e.date.startsWith(expenseHistoryFilters.month) : true;
-                    return matchSearch && matchCategory && matchMonth;
+                const categoriesList = ['Uncategorized', ...budgets.map(b => b.category)];
+
+                const filtered = combinedAll.filter(item => {
+                    const matchSearch = item.party.toLowerCase().includes(expenseHistoryFilters.search.toLowerCase()) || 
+                                        (item.amount && item.amount.toString().includes(expenseHistoryFilters.search));
+                    const matchCategory = expenseHistoryFilters.category ? item.category === expenseHistoryFilters.category : true;
+                    const matchMonth = expenseHistoryFilters.month ? item.date && item.date.startsWith(expenseHistoryFilters.month) : true;
+                    const matchType = expenseHistoryFilters.type !== 'All' ? item.type === expenseHistoryFilters.type : true;
+                    return matchSearch && matchCategory && matchMonth && matchType;
                 });
 
                 const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
                 const startIndex = (expenseHistoryPage - 1) * ITEMS_PER_PAGE;
                 const currentData = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-                // Generate unique months for filter (YYYY-MM format)
-                const uniqueMonths = [...new Set(confirmedExpenses.map(e => e.date ? e.date.substring(0, 7) : ''))].filter(Boolean).sort().reverse();
+                const uniqueMonths = [...new Set(combinedAll.map(e => e.date ? e.date.substring(0, 7) : ''))].filter(Boolean).sort().reverse();
 
                 return (
                     <div className="bg-gray-800 p-4 rounded-xl shadow-md border border-gray-700 h-full fade-in pb-20">
                          <div className="flex flex-col mb-4">
                             <div className="flex items-center mb-4">
                                 <button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button>
-                                <h2 className="text-xl font-bold text-gray-100">Expense History</h2>
+                                <h2 className="text-xl font-bold text-gray-100">Cashflow History</h2>
                             </div>
                             <div className="flex flex-col gap-2">
-                                <input type="text" placeholder="Search merchant or amount..." className="w-full p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={expenseHistoryFilters.search} onChange={e => setExpenseHistoryFilters(prev => ({...prev, search: e.target.value}))} />
+                                <input type="text" placeholder="Search merchant/source or amount..." className="w-full p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={expenseHistoryFilters.search} onChange={e => setExpenseHistoryFilters(prev => ({...prev, search: e.target.value}))} />
                                 <div className="flex gap-2">
-                                    <select className="w-1/2 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={expenseHistoryFilters.category} onChange={e => setExpenseHistoryFilters(prev => ({...prev, category: e.target.value}))}>
+                                    <select className="w-1/3 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={expenseHistoryFilters.type} onChange={e => setExpenseHistoryFilters(prev => ({...prev, type: e.target.value}))}>
+                                        <option value="All">All Types</option><option value="Expense">Expenses</option><option value="Income">Income</option>
+                                    </select>
+                                    <select className="w-1/3 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={expenseHistoryFilters.category} onChange={e => setExpenseHistoryFilters(prev => ({...prev, category: e.target.value}))}>
                                         <option value="">All Categories</option>
                                         {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
-                                    <select className="w-1/2 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={expenseHistoryFilters.month} onChange={e => setExpenseHistoryFilters(prev => ({...prev, month: e.target.value}))}>
+                                    <select className="w-1/3 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={expenseHistoryFilters.month} onChange={e => setExpenseHistoryFilters(prev => ({...prev, month: e.target.value}))}>
                                         <option value="">All Months</option>
-                                        {uniqueMonths.map(m => {
-                                            const d = new Date(m + '-01');
-                                            return <option key={m} value={m}>{d.toLocaleString('default', { month: 'short', year: 'numeric' })}</option>
-                                        })}
+                                        {uniqueMonths.map(m => { const d = new Date(m + '-01'); return <option key={m} value={m}>{d.toLocaleString('default', { month: 'short', year: '2-digit' })}</option> })}
                                     </select>
                                 </div>
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            {currentData.length === 0 && <p className="text-center text-gray-500 py-4 italic">No expenses found.</p>}
-                            {currentData.map((e, i) => (
+                            {currentData.length === 0 && <p className="text-center text-gray-500 py-4 italic">No records found.</p>}
+                            {currentData.map((item, i) => (
                                 <div key={i} className="flex justify-between items-center bg-gray-900 border border-gray-700/50 p-2 rounded-lg hover:bg-gray-750 transition">
                                     <div className="flex-1 min-w-0 pr-2 flex items-center gap-2.5">
-                                        <div className="text-[10px] text-gray-500 w-12 flex-shrink-0">{new Date(e.date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})}</div>
+                                        <div className="text-[10px] text-gray-500 w-12 flex-shrink-0">{new Date(item.date).toLocaleDateString('en-GB', {day:'2-digit', month:'short'})}</div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-gray-200 text-xs truncate leading-tight">{e.merchant}</div>
-                                            <div className="text-[9px] text-gray-400 uppercase leading-tight mt-0.5">{e.category || 'Uncategorized'}</div>
+                                            <div className="font-bold text-gray-200 text-xs truncate leading-tight">{item.party}</div>
+                                            <div className="text-[9px] text-gray-400 uppercase leading-tight mt-0.5">{item.category || 'Uncategorized'}</div>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0">
-                                        <div className="font-mono text-red-400 text-xs font-bold w-16 text-right">-₹{e.amount}</div>
+                                        <div className={`font-mono text-xs font-bold w-16 text-right ${item.type === 'Income' ? 'text-green-400' : 'text-red-400'}`}>{item.type === 'Income' ? '+' : '-'}₹{item.amount}</div>
                                         <div className="flex gap-1 border-l border-gray-700 pl-2">
-                                            <button onClick={() => setExpenseToEdit(e)} className="p-1.5 text-gray-500 hover:text-blue-400 transition rounded" title="Edit"><i data-lucide="edit-2" size={12}></i></button>
-                                            <button onClick={() => deleteExpense(e.id)} className="p-1.5 text-gray-500 hover:text-red-400 transition rounded" title="Delete"><i data-lucide="trash-2" size={12}></i></button>
+                                            <button onClick={() => setExpenseToEdit(item)} className="p-1.5 text-gray-500 hover:text-blue-400 transition rounded" title="Edit"><i data-lucide="edit-2" size={12}></i></button>
+                                            <button onClick={() => deleteCashflowItem(item.id, item.type)} className="p-1.5 text-gray-500 hover:text-red-400 transition rounded" title="Delete"><i data-lucide="trash-2" size={12}></i></button>
                                         </div>
                                     </div>
                                 </div>
@@ -869,20 +963,32 @@
                 <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
                     <div className="flex items-center mb-6"><button onClick={() => { setView(formData.type === 'General' ? 'expenses' : 'househelp'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Log Transaction</h2></div>
                     <form className="space-y-4">
+                        
+                        {formData.type === 'General' && (
+                            <div className="flex gap-2 bg-gray-900 p-1.5 rounded-lg mb-4 border border-gray-700">
+                                <button type="button" className={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData.action === 'Expense' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setFormData({...formData, action: 'Expense'})}>Expense</button>
+                                <button type="button" className={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData.action === 'Income' ? 'bg-green-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setFormData({...formData, action: 'Income'})}>Income</button>
+                            </div>
+                        )}
+
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Merchant / Helper</label>
-                            <input type="text" list="helper-options" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name} onChange={handleNameChange} placeholder="Select Helper or type Merchant..." autoFocus />
+                            <label className="block text-sm font-medium text-gray-300 mb-1">{formData.action === 'Income' ? 'Source of Income' : 'Merchant / Helper'}</label>
+                            <input type="text" list="helper-options" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name} onChange={handleNameChange} placeholder={formData.action === 'Income' ? 'e.g. Client Name...' : 'Select Helper or type Merchant...'} autoFocus />
                             <datalist id="helper-options">{helpers.map((h, i) => <option key={i} value={h.name} />)}</datalist>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Action</label>
-                            <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>
-                                {formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : formData.type === 'Weekly' ? (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>) : (<><option value="Expense">Expense</option></>)}
-                            </select>
-                        </div>
+                        
+                        {formData.type !== 'General' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Action</label>
+                                <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>
+                                    {formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>)}
+                                </select>
+                            </div>
+                        )}
+
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
                         
-                        {/* Only show Category and Tag for General Expenses, NOT for Househelp */}
+                        {/* Only show Category and Tag for General Entries, NOT for Househelp */}
                         {formData.type === 'General' && (
                             <>
                                 <div>
@@ -892,7 +998,7 @@
                                         {budgets.map(b => <option key={b.category} value={b.category}>{b.category}</option>)}
                                     </select>
                                 </div>
-                                <div><label className="block text-sm font-medium text-gray-300 mb-1">Tag</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.tag} onChange={e => setFormData({...formData, tag: e.target.value})} placeholder="e.g. groceries" /></div>
+                                <div><label className="block text-sm font-medium text-gray-300 mb-1">Tag</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.tag} onChange={e => setFormData({...formData, tag: e.target.value})} placeholder="e.g. project name" /></div>
                             </>
                         )}
 
@@ -935,9 +1041,9 @@
                 return (
                     <div className="bg-gray-800 p-4 rounded-xl shadow-md border border-gray-700 h-full fade-in pb-20">
                          <div className="flex flex-col mb-4">
-                            <div className="flex items-center mb-4"><button onClick={() => { setView('househelp'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">History</h2></div>
+                            <div className="flex items-center mb-4"><button onClick={() => { setView('househelp'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Helper History</h2></div>
                             <div className="flex gap-2">
-                                <select className="w-1/2 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.name} onChange={(e) => setHistoryFilters(prev => ({...prev, name: e.target.value}))}><option value="">All Merch/Helpers</option>{uniqueNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
+                                <select className="w-1/2 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.name} onChange={(e) => setHistoryFilters(prev => ({...prev, name: e.target.value}))}><option value="">All Helpers</option>{uniqueNames.map(n => <option key={n} value={n}>{n}</option>)}</select>
                                 <select className="w-1/2 p-2 bg-gray-700 border border-gray-600 text-white rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value={historyFilters.action} onChange={(e) => setHistoryFilters(prev => ({...prev, action: e.target.value}))}><option value="">All Actions</option>{uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}</select>
                             </div>
                         </div>
@@ -996,9 +1102,9 @@
                             </div>
                         )}
                         
-                        {view === 'expenses' && renderExpenses()}
+                        {view === 'expenses' && renderFinances()}
                         {view === 'budgets' && renderBudgets()}
-                        {view === 'expense_history' && renderExpenseHistory()}
+                        {view === 'cashflow_history' && renderCashflowHistory()}
                         {view === 'tasks' && renderTasks()}
                         {view === 'househelp' && renderHousehelp()}
                         
@@ -1037,7 +1143,7 @@
                                                 </div>
                                                 <div className="flex gap-2 pt-2 border-t border-gray-700">
                                                     <button onClick={() => confirmReviewExpense(r)} className="flex-1 bg-green-600/20 text-green-400 py-2 rounded-lg text-xs font-bold uppercase border border-green-600/50 hover:bg-green-600 hover:text-white transition">Confirm</button>
-                                                    <button onClick={() => deleteExpense(r.id)} className="flex-1 bg-red-900/20 text-red-400 py-2 rounded-lg text-xs font-bold uppercase border border-red-800/50 hover:bg-red-600 hover:text-white transition">Delete</button>
+                                                    <button onClick={() => deleteCashflowItem(r.id, 'Expense')} className="flex-1 bg-red-900/20 text-red-400 py-2 rounded-lg text-xs font-bold uppercase border border-red-800/50 hover:bg-red-600 hover:text-white transition">Delete</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1046,13 +1152,13 @@
                             </div>
                         )}
 
-                        {/* Edit Confirmed Expense Modal */}
+                        {/* Edit Confirmed Cashflow Modal */}
                         {expenseToEdit && (
                             <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4 fade-in">
                                 <div className="bg-gray-800 p-5 rounded-xl shadow-2xl border border-gray-700 w-full max-w-sm">
-                                    <h3 className="text-lg font-bold text-gray-100 mb-4">Edit Expense</h3>
+                                    <h3 className="text-lg font-bold text-gray-100 mb-4">Edit {expenseToEdit.type}</h3>
                                     <div className="space-y-3">
-                                        <div><label className="text-[10px] text-gray-400 uppercase">Merchant</label><input type="text" value={expenseToEdit.merchant} onChange={e=>setExpenseToEdit({...expenseToEdit, merchant: e.target.value})} className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white text-sm outline-none focus:border-blue-500"/></div>
+                                        <div><label className="text-[10px] text-gray-400 uppercase">{expenseToEdit.type === 'Income' ? 'Source' : 'Merchant'}</label><input type="text" value={expenseToEdit.party} onChange={e=>setExpenseToEdit({...expenseToEdit, party: e.target.value})} className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white text-sm outline-none focus:border-blue-500"/></div>
                                         <div><label className="text-[10px] text-gray-400 uppercase">Amount</label><input type="number" value={expenseToEdit.amount} onChange={e=>setExpenseToEdit({...expenseToEdit, amount: e.target.value})} className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white text-sm outline-none focus:border-blue-500"/></div>
                                         <div><label className="text-[10px] text-gray-400 uppercase">Category</label><select value={expenseToEdit.category} onChange={e=>setExpenseToEdit({...expenseToEdit, category: e.target.value})} className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white text-sm outline-none focus:border-blue-500">
                                             <option value="Uncategorized">Uncategorized</option>
@@ -1063,10 +1169,17 @@
                                     <div className="flex gap-2 mt-5 pt-4 border-t border-gray-700">
                                         <button onClick={()=>setExpenseToEdit(null)} className="flex-1 p-2 bg-gray-700 rounded font-bold text-gray-300 text-sm hover:bg-gray-600 transition">Cancel</button>
                                         <button onClick={async () => {
-                                            setExpenses(expenses.map(e => e.id === expenseToEdit.id ? expenseToEdit : e));
+                                            const isIncome = expenseToEdit.type === 'Income';
+                                            if (isIncome) {
+                                                setIncome(income.map(i => i.id === expenseToEdit.id ? { ...expenseToEdit, source: expenseToEdit.party } : i));
+                                            } else {
+                                                setExpenses(expenses.map(e => e.id === expenseToEdit.id ? { ...expenseToEdit, merchant: expenseToEdit.party } : e));
+                                            }
                                             const updatedExp = expenseToEdit;
                                             setExpenseToEdit(null);
-                                            await submitData({ method: 'update_expense', id: updatedExp.id, amount: updatedExp.amount, merchant: updatedExp.merchant, category: updatedExp.category, status: updatedExp.status, date: updatedExp.date }, true);
+                                            
+                                            const method = isIncome ? 'update_income' : 'update_expense';
+                                            await submitData({ method: method, id: updatedExp.id, amount: updatedExp.amount, [isIncome ? 'source' : 'merchant']: updatedExp.party, category: updatedExp.category, status: updatedExp.status, date: updatedExp.date }, true);
                                         }} className="flex-1 p-2 bg-blue-600 rounded font-bold text-white text-sm hover:bg-blue-500 transition shadow-lg">Save Changes</button>
                                     </div>
                                 </div>
@@ -1078,10 +1191,10 @@
                     {isRootView && (
                         <nav className="bg-gray-800 border-t border-gray-700 pb-safe sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
                             <div className="flex justify-around items-center p-2">
-                                <button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'expenses' || view === 'add_expense' ? 'text-red-400' : 'text-gray-400 hover:text-gray-200'}`}>
+                                <button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'expenses' || view === 'add_expense' ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}>
                                     <i data-lucide="wallet" size={24}></i>
                                     {expenses.filter(e => e.status === 'Review').length > 0 && <span className="absolute top-1 right-1/4 translate-x-2 -translate-y-1 bg-yellow-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full border border-gray-800">{expenses.filter(e => e.status === 'Review').length}</span>}
-                                    <span className="text-[10px] mt-1 font-medium">Expenses</span>
+                                    <span className="text-[10px] mt-1 font-medium">Cashflow</span>
                                 </button>
                                 <button onClick={() => { setView('tasks'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'tasks' ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}>
                                     <i data-lucide="check-square" size={24}></i>
