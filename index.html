@@ -189,7 +189,6 @@
         function App() {
             const [view, setView] = useState('expenses'); 
             const [loading, setLoading] = useState(true);
-            const [refreshTrigger, setRefreshTrigger] = useState(0);
             const [successMsg, setSuccessMsg] = useState('');
             
             const [transactions, setTransactions] = useState([]);
@@ -227,10 +226,18 @@
             const [taskInput, setTaskInput] = useState('');
             const taskInputRef = useRef(null); 
 
-            useEffect(() => { if (WEB_APP_URL) fetchData(refreshTrigger > 0); }, [refreshTrigger]);
+            useEffect(() => { if (WEB_APP_URL) fetchData(false); }, []);
             useEffect(() => { lucide.createIcons(); }); 
             useEffect(() => { setHistoryPage(1); }, [historyFilters]);
             useEffect(() => { setExpenseHistoryPage(1); }, [expenseHistoryFilters]);
+
+            // Enhancement 1: Keep toast message transient (3 seconds)
+            useEffect(() => {
+                if (successMsg) {
+                    const timer = setTimeout(() => setSuccessMsg(''), 3000);
+                    return () => clearTimeout(timer);
+                }
+            }, [successMsg]);
 
             const fetchData = async (silent = false) => {
                 if (!silent) setLoading(true);
@@ -287,29 +294,35 @@
                 } return false;
             };
 
+            // Enhancement 2: Block screen completely until DB is updated
             const submitData = async (payloadObj, skipRefresh = false) => {
                 if (!WEB_APP_URL) return false;
                 setSuccessMsg('');
-                if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item' && !skipRefresh) { setLoading(true); }
+                
+                setLoading(true); // Freeze the screen
                 
                 try {
                     const payload = new URLSearchParams(payloadObj);
                     await fetch(WEB_APP_URL, { method: 'POST', body: payload });
                     
                     if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
-                        if (!skipRefresh) setRefreshTrigger(prev => prev + 1);
                         setSuccessMsg(payloadObj.method.includes('delete') ? "Deleted successfully! 🗑️" : "Saved successfully! ✅");
                         // Reset forms properly
                         if(payloadObj.method === 'add_transaction' || payloadObj.method === 'add_expense' || payloadObj.method === 'add_income') {
                             setFormData(prev => ({ ...prev, amount: '', notes: '', name: '', category: 'Uncategorized', tag: '' }));
                         }
                     } 
+                    
+                    if (!skipRefresh && payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
+                        await fetchData(true); // Pull fresh data from DB
+                    }
                 } catch (error) { 
                     console.error(error); alert("Action failed"); 
-                    setLoading(false); return false; 
+                    setLoading(false); 
+                    return false; 
                 }
                 
-                if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item' && !skipRefresh) { setLoading(false); }
+                setLoading(false); // Unfreeze the screen
                 return true;
             };
 
@@ -1008,7 +1021,6 @@
                             <button type="button" onClick={() => handleTransactionAction(false)} disabled={loading} className="w-1/2 py-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-xl font-bold hover:bg-gray-600 transition shadow-sm">{loading ? 'Saving...' : 'Save'}</button>
                             <button type="button" onClick={() => handleTransactionAction(true)} disabled={loading} className="w-1/2 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition shadow-lg">{loading ? 'Saving...' : 'Save & Home'}</button>
                         </div>
-                        {successMsg && <div className="mt-2 text-green-400 text-sm font-bold text-center bg-green-900/30 border border-green-800 p-2 rounded">{successMsg}</div>}
                     </form>
                 </div>
             );
@@ -1099,9 +1111,14 @@
                     </header>
                     
                     <main className="flex-1 p-4 relative overflow-y-auto">
+                        
+                        {/* Enhancement 2: Synchronous DB Locking UI Overlay */}
                         {loading && (transactions.length > 0 || helpers.length > 0) && (
-                            <div className="fixed top-4 right-1/2 translate-x-1/2 z-[60] bg-gray-800/80 p-2 rounded-full shadow-lg backdrop-blur-sm">
-                                <div className="spinner w-5 h-5 border-2"></div>
+                            <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center touch-none">
+                                <div className="bg-gray-900 border border-gray-700 p-6 rounded-2xl shadow-2xl flex flex-col items-center justify-center fade-in min-w-[140px]">
+                                    <div className="spinner mb-4" style={{width: '30px', height: '30px', borderWidth: '4px'}}></div>
+                                    <span className="text-blue-400 text-xs font-bold uppercase tracking-widest">Saving...</span>
+                                </div>
                             </div>
                         )}
                         
