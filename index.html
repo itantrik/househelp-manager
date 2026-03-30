@@ -696,6 +696,7 @@
             };
 
             const renderBudgets = () => {
+                const currentMonthValue = `${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`;
                 const currentMonth = dashboardDate.getMonth();
                 const currentYear = dashboardDate.getFullYear();
                 
@@ -717,12 +718,15 @@
 
                 return (
                     <div className="space-y-4 fade-in pb-20">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center">
-                                <button onClick={() => setView('expenses')} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button>
-                                <h2 className="text-xl font-bold text-gray-100">Budget Manager</h2>
+                        <div className="flex flex-col gap-4 mb-6">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    <button onClick={() => setView('expenses')} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button>
+                                    <h2 className="text-xl font-bold text-gray-100">Budgets</h2>
+                                </div>
+                                <button onClick={() => { setBudgetForm({old_category: '', category: '', limit: ''}); setBudgetFormOpen(true); }} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow"><i data-lucide="plus" size={14}></i> Add</button>
                             </div>
-                            <button onClick={() => { setBudgetForm({old_category: '', category: '', limit: ''}); setBudgetFormOpen(true); }} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow"><i data-lucide="plus" size={14}></i> Add</button>
+                            <input type="month" value={currentMonthValue} onChange={e => { if(e.target.value) { const [y,m] = e.target.value.split('-'); setDashboardDate(new Date(parseInt(y), parseInt(m)-1, 1)); }}} className="w-full bg-gray-800 border border-gray-700 text-white text-sm font-bold rounded-lg p-2 shadow-sm outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
 
                         {budgetFormOpen && (
