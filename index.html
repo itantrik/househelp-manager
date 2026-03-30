@@ -197,7 +197,7 @@
             const [taskList, setTaskList] = useState([]); 
             const [budgets, setBudgets] = useState([]);
             const [expenses, setExpenses] = useState([]);
-            const [income, setIncome] = useState([]); // NEW state for tracking Income records
+            const [income, setIncome] = useState([]); 
             
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [authPassword, setAuthPassword] = useState(null);
@@ -1093,6 +1093,9 @@
                         <div className="text-xl font-bold text-gray-100 flex items-center gap-2 cursor-pointer select-none" onClick={() => { setView('expenses'); setSuccessMsg(''); }}>
                             <i data-lucide="home" className="text-blue-500"></i> HouseOS
                         </div>
+                        <button onClick={() => fetchData(false)} disabled={loading} className={`p-2 rounded-full bg-gray-900 border border-gray-700 text-gray-300 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700 active:scale-95'}`}>
+                            <i data-lucide="refresh-cw" size={18} className={loading ? 'animate-spin' : ''}></i>
+                        </button>
                     </header>
                     
                     <main className="flex-1 p-4 relative overflow-y-auto">
