@@ -131,16 +131,53 @@
         function LoginScreen({ onUnlock }) {
             const [pin, setPin] = useState('');
             const [error, setError] = useState(false);
-            const handleSubmit = (e) => { e.preventDefault(); if (!onUnlock(pin)) { setError(true); setPin(''); } };
+
+            const handleNumberClick = (num) => {
+                if (pin.length < 4) {
+                    setPin(p => p + num);
+                    setError(false);
+                }
+            };
+
+            const handleClear = () => {
+                setPin('');
+                setError(false);
+            };
+
+            const handleSubmit = () => {
+                if (!onUnlock(pin)) {
+                    setError(true);
+                    setPin('');
+                }
+            };
+
             return (
                 <div className="min-h-screen flex items-center justify-center p-4">
-                    <div className="bg-gray-800 p-8 rounded-2xl shadow-xl border border-gray-700 w-full max-w-sm text-center">
-                        <div className="mb-6 inline-block p-4 bg-blue-900/30 rounded-full text-blue-400"><i data-lucide="lock" size={32}></i></div>
-                        <h2 className="text-2xl font-bold text-gray-100 mb-6">Welcome to HouseOS</h2>
-                        <form onSubmit={handleSubmit}>
-                            <input type="password" value={pin} onChange={e => { setPin(e.target.value); setError(false); }} className={`w-full p-3 bg-gray-700 text-white placeholder-gray-500 text-center text-lg tracking-widest border rounded-xl outline-none mb-4 focus:ring-2 ${error ? 'border-red-500 focus:ring-red-400' : 'border-gray-600 focus:ring-blue-500'}`} placeholder="• • • •" autoFocus />
-                            <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-500 transition">Unlock App</button>
-                        </form>
+                    <div className="bg-gray-800 p-8 rounded-2xl shadow-xl border border-gray-700 w-full max-w-sm flex flex-col items-center text-center">
+                        <div className="mb-6 p-4 bg-blue-900/30 rounded-full text-blue-400">
+                            <i data-lucide="lock" size={32}></i>
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-100 mb-2">Welcome to HouseOS</h2>
+                        <p className="text-gray-400 mb-8 text-sm">Enter secure PIN to continue</p>
+                        
+                        <div className="flex gap-4 mb-8">
+                            {[1, 2, 3, 4].map(i => (
+                                <div key={i} className={`w-4 h-4 rounded-full border-2 transition-colors ${error ? 'border-red-500 bg-red-500/50' : pin.length >= i ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`}></div>
+                            ))}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 w-full">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                                <button key={num} onClick={() => handleNumberClick(num)} className="h-16 bg-gray-700 rounded-xl text-xl font-bold text-white hover:bg-gray-600 active:scale-95 transition">
+                                    {num}
+                                </button>
+                            ))}
+                            <button onClick={handleClear} className="h-16 bg-gray-700 rounded-xl text-sm font-bold uppercase text-gray-400 hover:bg-gray-600 active:scale-95 transition">Clear</button>
+                            <button onClick={() => handleNumberClick(0)} className="h-16 bg-gray-700 rounded-xl text-xl font-bold text-white hover:bg-gray-600 active:scale-95 transition">0</button>
+                            <button onClick={handleSubmit} className="h-16 bg-blue-600 rounded-xl flex items-center justify-center text-white hover:bg-blue-500 active:scale-95 transition shadow-lg">
+                                <i data-lucide="check" size={24}></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             );
