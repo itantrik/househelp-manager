@@ -11,11 +11,8 @@
 
     <title>HouseOS Unified Tracker</title>
     
-    <link rel="icon" type="image/png" href="icon.png">
-    <link rel="apple-touch-icon" href="icon.png">
-    
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -51,8 +48,7 @@
             projectId: "nexus-os-949c4",
             storageBucket: "nexus-os-949c4.firebasestorage.app",
             messagingSenderId: "329666668961",
-            appId: "1:329666668961:web:df7689e4ea2c3e9119c3e0",
-            measurementId: "G-DR9QGBXTK6"
+            appId: "1:329666668961:web:df7689e4ea2c3e9119c3e0"
         };
 
         let messaging = null;
@@ -63,12 +59,13 @@
             }
         } catch (e) { console.error("Firebase init error", e); }
 
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef, memo } = React;
 
         // ==========================================
-        // 2. SUB-COMPONENTS
+        // 2. ISOLATED SUB-COMPONENTS (Fixes Typing Lag)
         // ==========================================
-        function Calculator({ onBack }) {
+
+        const Calculator = memo(({ onBack }) => {
             const [salary, setSalary] = useState('');
             const [stdDays, setStdDays] = useState('30');
             const [stdHours, setStdHours] = useState('8');
@@ -126,9 +123,9 @@
                     </div>
                 </div>
             );
-        }
+        });
 
-        function LoginScreen({ onUnlock }) {
+        const LoginScreen = memo(({ onUnlock }) => {
             const [pin, setPin] = useState('');
             const [error, setError] = useState(false);
 
@@ -137,11 +134,6 @@
                     setPin(p => p + num);
                     setError(false);
                 }
-            };
-
-            const handleClear = () => {
-                setPin('');
-                setError(false);
             };
 
             const handleSubmit = () => {
@@ -172,7 +164,7 @@
                                     {num}
                                 </button>
                             ))}
-                            <button onClick={handleClear} className="h-16 bg-gray-700 rounded-xl text-sm font-bold uppercase text-gray-400 hover:bg-gray-600 active:scale-95 transition">Clear</button>
+                            <button onClick={() => { setPin(''); setError(false); }} className="h-16 bg-gray-700 rounded-xl text-sm font-bold uppercase text-gray-400 hover:bg-gray-600 active:scale-95 transition">Clear</button>
                             <button onClick={() => handleNumberClick(0)} className="h-16 bg-gray-700 rounded-xl text-xl font-bold text-white hover:bg-gray-600 active:scale-95 transition">0</button>
                             <button onClick={handleSubmit} className="h-16 bg-blue-600 rounded-xl flex items-center justify-center text-white hover:bg-blue-500 active:scale-95 transition shadow-lg">
                                 <i data-lucide="check" size={24}></i>
@@ -181,7 +173,156 @@
                     </div>
                 </div>
             );
-        }
+        });
+
+        const TasksView = memo(({ taskList, submitData, successMsg }) => {
+            const [taskInput, setTaskInput] = useState('');
+            const [isTasksExpanded, setIsTasksExpanded] = useState(false);
+            
+            const handleTaskSubmit = (e) => {
+                e.preventDefault(); if (!taskInput.trim()) return;
+                submitData({ method: 'add_shopping_item', item: taskInput }, true);
+                setTaskInput('');
+            };
+
+            const toggleTaskItem = (item) => {
+                submitData({ method: 'toggle_shopping_item', item: item.item, date: item.date }, true);
+            };
+
+            const openItems = taskList.filter(i => i.status === 'Open');
+            const doneItems = taskList.filter(i => i.status === 'Done');
+
+            return (
+                <div className="fade-in space-y-4 pb-20">
+                    {successMsg && <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded-xl text-sm font-bold text-center animate-fade-in-down">{successMsg}</div>}
+                    <h2 className="text-xl font-bold text-gray-100 mb-4">Task List</h2>
+                    <form onSubmit={handleTaskSubmit} className="mb-6 relative">
+                        <input type="text" className="w-full p-4 pr-12 bg-gray-800 border border-gray-700 text-white placeholder-gray-400 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="Add task..." value={taskInput} onChange={e => setTaskInput(e.target.value)} />
+                        <button type="submit" className="absolute right-3 top-3 p-1 text-blue-400 bg-blue-500/20 rounded-full hover:bg-blue-500/30 transition"><i data-lucide="plus" size={24}></i></button>
+                    </form>
+                    <div className="space-y-2 mb-6">
+                        {openItems.length === 0 && <p className="text-center text-gray-500 py-4 italic">All tasks completed! 🎉</p>}
+                        {openItems.map((item, idx) => (
+                            <div key={idx} onClick={() => toggleTaskItem(item)} className="flex items-center p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-sm cursor-pointer hover:bg-gray-700 transition select-none group">
+                                <div className="w-5 h-5 rounded border-2 border-gray-500 mr-3 group-hover:border-blue-400 flex-shrink-0"></div>
+                                <span className="text-gray-200 font-medium break-words">{item.item}</span>
+                            </div>
+                        ))}
+                    </div>
+                    {doneItems.length > 0 && (
+                        <div className="border-t border-gray-700 pt-4">
+                            <button onClick={() => setIsTasksExpanded(!isTasksExpanded)} className="flex items-center text-gray-400 text-sm font-bold mb-3 hover:text-gray-300 transition"><i data-lucide={isTasksExpanded ? "chevron-down" : "chevron-right"} size={16} className="mr-1"></i> Completed ({doneItems.length})</button>
+                            {isTasksExpanded && (
+                                <div className="space-y-2 fade-in">
+                                    {doneItems.map((item, idx) => (
+                                        <div key={idx} onClick={() => toggleTaskItem(item)} className="flex items-center p-2 opacity-60 cursor-pointer hover:opacity-100 transition">
+                                            <div className="w-5 h-5 rounded bg-green-900/30 border border-green-700 mr-3 flex items-center justify-center text-green-400 flex-shrink-0"><i data-lucide="check" size={12}></i></div>
+                                            <span className="text-gray-400 line-through decoration-gray-500 break-words">{item.item}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        });
+
+        // Isolated form component prevents keystrokes from re-rendering the whole app
+        const TransactionFormView = memo(({ helpers, budgets, submitData, setView, initialFormData, successMsg }) => {
+            const [formData, setFormData] = useState(initialFormData || { type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: 'Uncategorized', tag: '', notes: '' });
+            const [loading, setLoading] = useState(false);
+
+            const handleNameChange = (e) => {
+                const val = e.target.value;
+                const h = helpers.find(x => x.name === val);
+                setFormData(prev => ({
+                    ...prev, name: val, 
+                    type: h ? h.type : 'General', 
+                    action: h ? (h.type === 'Monthly' ? 'Payment/Advance' : 'Payment') : prev.action,
+                    amount: h ? (h.amount || '') : prev.amount
+                }));
+            };
+
+            const handleTransactionAction = async (goHome) => {
+                if (!formData.name || !formData.amount) { alert("Please complete required fields."); return; }
+                setLoading(true);
+                
+                let method = 'add_transaction';
+                if (formData.action === 'Expense') method = 'add_expense';
+                if (formData.action === 'Income') method = 'add_income';
+
+                const success = await submitData({ 
+                    method, 
+                    amount: formData.amount, 
+                    merchant: formData.name, 
+                    source: formData.name, 
+                    category: formData.category, 
+                    date: formData.date,
+                    ...formData 
+                }, false);
+                
+                setLoading(false);
+                if (success && goHome) {
+                    setView(method === 'add_transaction' ? 'househelp' : 'expenses');
+                    window.scrollTo(0, 0);
+                } else if (success) {
+                    setFormData(prev => ({ ...prev, amount: '', notes: '', name: '', category: 'Uncategorized', tag: '' }));
+                }
+            };
+
+            return (
+                <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
+                    <div className="flex items-center mb-6"><button onClick={() => setView(formData.type === 'General' ? 'expenses' : 'househelp')} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Log Transaction</h2></div>
+                    <form className="space-y-4">
+                        {formData.type === 'General' && (
+                            <div className="flex gap-2 bg-gray-900 p-1.5 rounded-lg mb-4 border border-gray-700">
+                                <button type="button" className={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData.action === 'Expense' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setFormData({...formData, action: 'Expense'})}>Expense</button>
+                                <button type="button" className={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData.action === 'Income' ? 'bg-green-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setFormData({...formData, action: 'Income'})}>Income</button>
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">{formData.action === 'Income' ? 'Source of Income' : 'Merchant / Helper'}</label>
+                            <input type="text" list="helper-options" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name} onChange={handleNameChange} placeholder={formData.action === 'Income' ? 'e.g. Client Name...' : 'Select Helper or type Merchant...'} autoFocus />
+                            <datalist id="helper-options">{helpers.map((h, i) => <option key={i} value={h.name} />)}</datalist>
+                        </div>
+                        
+                        {formData.type !== 'General' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Action</label>
+                                <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>
+                                    {formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>)}
+                                </select>
+                            </div>
+                        )}
+
+                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
+                        
+                        {formData.type === 'General' && (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                                    <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                                        <option value="Uncategorized">Uncategorized</option>
+                                        {budgets.map(b => <option key={b.category} value={b.category}>{b.category}</option>)}
+                                    </select>
+                                </div>
+                                <div><label className="block text-sm font-medium text-gray-300 mb-1">Tag</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.tag} onChange={e => setFormData({...formData, tag: e.target.value})} placeholder="e.g. project name" /></div>
+                            </>
+                        )}
+
+                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Date</label><input type="date" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
+                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Notes</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Optional" /></div>
+                        <div className="flex gap-3 pt-2">
+                            <button type="button" onClick={() => handleTransactionAction(false)} disabled={loading} className="w-1/2 py-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-xl font-bold hover:bg-gray-600 transition shadow-sm">Save</button>
+                            <button type="button" onClick={() => handleTransactionAction(true)} disabled={loading} className="w-1/2 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition shadow-lg">Save & Home</button>
+                        </div>
+                        {successMsg && <div className="mt-2 text-green-400 text-sm font-bold text-center bg-green-900/30 border border-green-800 p-2 rounded">{successMsg}</div>}
+                    </form>
+                </div>
+            );
+        });
 
         // ==========================================
         // 3. MAIN APP COMPONENT
@@ -189,6 +330,7 @@
         function App() {
             const [view, setView] = useState('expenses'); 
             const [loading, setLoading] = useState(true);
+            const [isFreezing, setIsFreezing] = useState(false); // Controls the full screen overlay
             const [successMsg, setSuccessMsg] = useState('');
             
             const [transactions, setTransactions] = useState([]);
@@ -205,33 +347,24 @@
             const [historyFilters, setHistoryFilters] = useState({ name: '', action: '' }); 
             const [historyPage, setHistoryPage] = useState(1); 
             
-            // Filters for Cashflow History
             const [expenseHistoryFilters, setExpenseHistoryFilters] = useState({ search: '', category: '', month: '', type: 'All' });
             const [expenseHistoryPage, setExpenseHistoryPage] = useState(1);
 
-            const [isTasksExpanded, setIsTasksExpanded] = useState(false); 
             const [transactionToDelete, setTransactionToDelete] = useState(null); 
-            
             const [expenseToEdit, setExpenseToEdit] = useState(null);
             const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
             
             const [budgetFormOpen, setBudgetFormOpen] = useState(false);
             const [budgetForm, setBudgetForm] = useState({ old_category: '', category: '', limit: '' });
+            const [sharedFormData, setSharedFormData] = useState(null); // Used to pass initial data to TransactionForm
 
             const ITEMS_PER_PAGE = 20;
             const [dashboardDate, setDashboardDate] = useState(new Date());
 
-            const [formData, setFormData] = useState({ type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: 'Uncategorized', tag: '', notes: '' });
-            const [helperForm, setHelperForm] = useState({ name: '', type: 'Monthly', defaultAmount: '' });
-            const [taskInput, setTaskInput] = useState('');
-            const taskInputRef = useRef(null); 
-
             useEffect(() => { if (WEB_APP_URL) fetchData(false); }, []);
             useEffect(() => { lucide.createIcons(); }); 
-            useEffect(() => { setHistoryPage(1); }, [historyFilters]);
-            useEffect(() => { setExpenseHistoryPage(1); }, [expenseHistoryFilters]);
-
-            // Enhancement 1: Keep toast message transient (3 seconds)
+            
+            // Transient Toast Message logic
             useEffect(() => {
                 if (successMsg) {
                     const timer = setTimeout(() => setSuccessMsg(''), 3000);
@@ -239,7 +372,7 @@
                 }
             }, [successMsg]);
 
-            const fetchData = async (silent = false) => {
+            const fetchData = useCallback(async (silent = false) => {
                 if (!silent) setLoading(true);
                 try {
                     const response = await fetch(WEB_APP_URL);
@@ -265,9 +398,9 @@
                     }
                 } catch (error) { console.error("Error fetching data", error); }
                 if (!silent) setLoading(false);
-            };
+            }, []);
 
-            const setupNotifications = async () => {
+            const setupNotifications = useCallback(async () => {
                 if (!messaging) return;
                 try {
                     const permission = await Notification.requestPermission();
@@ -277,7 +410,7 @@
                         if (token) await submitData({ method: 'register_token', token: token }, true);
                     }
                 } catch (error) { console.log("Notification setup failed", error); }
-            };
+            }, []);
 
             const checkSession = (password) => {
                 const session = JSON.parse(localStorage.getItem('houseos_auth_session'));
@@ -294,121 +427,63 @@
                 } return false;
             };
 
-            // Enhancement 2: Block screen completely until DB is updated
-            const submitData = async (payloadObj, skipRefresh = false) => {
+            // Master Submit Data (Handles UI Freezing)
+            const submitData = useCallback(async (payloadObj, skipRefresh = false) => {
                 if (!WEB_APP_URL) return false;
                 setSuccessMsg('');
                 
-                setLoading(true); // Freeze the screen
+                // Do not freeze for task toggles to keep UI snappy
+                const isSilentAction = payloadObj.method === 'add_shopping_item' || payloadObj.method === 'toggle_shopping_item';
+                
+                if (!isSilentAction) setIsFreezing(true); 
                 
                 try {
                     const payload = new URLSearchParams(payloadObj);
                     await fetch(WEB_APP_URL, { method: 'POST', body: payload });
                     
-                    if (payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
+                    if (!isSilentAction) {
                         setSuccessMsg(payloadObj.method.includes('delete') ? "Deleted successfully! 🗑️" : "Saved successfully! ✅");
-                        // Reset forms properly
-                        if(payloadObj.method === 'add_transaction' || payloadObj.method === 'add_expense' || payloadObj.method === 'add_income') {
-                            setFormData(prev => ({ ...prev, amount: '', notes: '', name: '', category: 'Uncategorized', tag: '' }));
-                        }
                     } 
                     
-                    if (!skipRefresh && payloadObj.method !== 'add_shopping_item' && payloadObj.method !== 'toggle_shopping_item') {
-                        await fetchData(true); // Pull fresh data from DB
+                    // Fetch fresh data if needed, but we can do it silently in the background
+                    if (!skipRefresh && !isSilentAction) {
+                        await fetchData(true); 
                     }
                 } catch (error) { 
                     console.error(error); alert("Action failed"); 
-                    setLoading(false); 
+                    setIsFreezing(false); 
                     return false; 
                 }
                 
-                setLoading(false); // Unfreeze the screen
+                setIsFreezing(false); 
                 return true;
-            };
+            }, [fetchData]);
 
-            // --- HANDLERS (TRANSACTIONS / HELPERS) ---
+            // --- DELEGATED HANDLERS ---
             const confirmDelete = async () => {
                 if (!transactionToDelete) return;
                 const t = transactionToDelete;
                 setTransactionToDelete(null);
-                setTransactions(prev => prev.filter(tx => tx !== t)); 
+                setTransactions(prev => prev.filter(tx => tx !== t)); // Optimistic UI
                 await submitData({ method: 'delete_transaction', date: t.date, name: t.name, action: t.action, amount: t.amount });
             };
 
-            const handleTransactionAction = async (goHome) => {
-                if (!formData.name || !formData.amount) { alert("Please complete required fields (Merchant/Source & Amount)."); return; }
-                
-                if (formData.action === 'Expense') {
-                    const success = await submitData({ method: 'add_expense', amount: formData.amount, merchant: formData.name, category: formData.category, date: formData.date }, goHome);
-                    if (success && goHome) { await fetchData(false); setView('expenses'); window.scrollTo(0, 0); }
-                    return;
-                } else if (formData.action === 'Income') {
-                    const success = await submitData({ method: 'add_income', amount: formData.amount, source: formData.name, category: formData.category, date: formData.date }, goHome);
-                    if (success && goHome) { await fetchData(false); setView('expenses'); window.scrollTo(0, 0); }
-                    return;
-                }
-
-                const success = await submitData({ ...formData, method: 'add_transaction' }, goHome);
-                if (success && goHome) {
-                    await fetchData(false);
-                    setView('househelp');
-                    window.scrollTo(0, 0);
-                }
-            };
-
-            const handleNameChange = (e) => {
-                const val = e.target.value;
-                const h = helpers.find(x => x.name === val);
-                setFormData(prev => ({
-                    ...prev, name: val, 
-                    type: h ? h.type : 'General', 
-                    action: h ? (h.type === 'Monthly' ? 'Payment/Advance' : 'Payment') : prev.action,
-                    amount: h ? (h.amount || '') : prev.amount
-                }));
-            };
-
-            const handleHelperSubmit = (e) => { 
-                e.preventDefault(); if(!helperForm.name) return; 
-                submitData({ ...helperForm, method: 'add_helper' }); 
-                setHelperForm({ name: '', type: 'Monthly', defaultAmount: '' }); 
-            };
-
-            const handleTaskSubmit = (e) => {
-                e.preventDefault(); if (!taskInput.trim()) return;
-                const tempItem = { date: new Date().toISOString(), item: taskInput, status: 'Open' };
-                setTaskList([...taskList, tempItem]); 
-                submitData({ method: 'add_shopping_item', item: taskInput });
-                setTaskInput('');
-                if(taskInputRef.current) taskInputRef.current.focus();
-            };
-
-            const toggleTaskItem = (item) => {
-                const updatedList = taskList.map(i => (i.item === item.item && i.date === item.date) ? { ...i, status: i.status === 'Open' ? 'Done' : 'Open' } : i );
-                setTaskList(updatedList); 
-                submitData({ method: 'toggle_shopping_item', item: item.item, date: item.date });
-            };
-
-            const handleDeleteTransaction = (t) => {
-                setTransactionToDelete(t);
-            };
-
-            // --- HANDLERS (EXPENSES & INCOME) ---
-            const handleUpdateReviewExpense = (id, field, value) => {
-                setExpenses(expenses.map(e => e.id === id ? { ...e, [field]: value } : e));
-            };
+            const handleUpdateReviewExpense = useCallback((id, field, value) => {
+                setExpenses(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e));
+            }, []);
 
             const confirmReviewExpense = async (expense) => {
-                setExpenses(expenses.map(e => e.id === expense.id ? { ...e, status: 'Confirmed' } : e));
+                setExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, status: 'Confirmed' } : e));
                 await submitData({ method: 'update_expense', id: expense.id, amount: expense.amount, merchant: expense.merchant, category: expense.category, status: 'Confirmed' }, true);
             };
 
             const deleteCashflowItem = async (id, type) => {
                 if(window.confirm(`Delete this ${type}?`)) {
                     if (type === 'Expense') {
-                        setExpenses(expenses.filter(e => e.id !== id));
+                        setExpenses(prev => prev.filter(e => e.id !== id));
                         await submitData({ method: 'delete_expense', id: id }, true);
                     } else {
-                        setIncome(income.filter(i => i.id !== id));
+                        setIncome(prev => prev.filter(i => i.id !== id));
                         await submitData({ method: 'delete_income', id: id }, true);
                     }
                 }
@@ -417,39 +492,13 @@
             const bulkConfirmExpenses = async () => {
                 const reviews = expenses.filter(e => e.status === 'Review');
                 if (reviews.length === 0) return;
-                
-                setExpenses(expenses.map(e => e.status === 'Review' ? { ...e, status: 'Confirmed' } : e));
+                setExpenses(prev => prev.map(e => e.status === 'Review' ? { ...e, status: 'Confirmed' } : e));
                 const ids = reviews.map(e => e.id).join(',');
                 await submitData({ method: 'bulk_confirm_expenses', ids: ids }, true);
                 setIsReviewModalOpen(false);
             };
 
-            // --- BUDGET MANAGER HANDLERS ---
-            const handleSaveBudget = async () => {
-                if (!budgetForm.category || !budgetForm.limit) return;
-                const method = budgetForm.old_category ? 'update_budget' : 'add_budget';
-                
-                if (budgetForm.old_category) {
-                    setBudgets(budgets.map(b => b.category === budgetForm.old_category ? { category: budgetForm.category, limit: budgetForm.limit } : b));
-                } else {
-                    setBudgets([...budgets, { category: budgetForm.category, limit: budgetForm.limit }]);
-                }
-
-                await submitData({ method, old_category: budgetForm.old_category, category: budgetForm.category, limit: budgetForm.limit }, true);
-                setBudgetFormOpen(false);
-            };
-
-            const handleDeleteBudget = async (category) => {
-                if(window.confirm(`Delete budget category: ${category}?`)) {
-                    setBudgets(budgets.filter(b => b.category !== category));
-                    await submitData({ method: 'delete_budget', category }, true);
-                }
-            };
-
-            // --- COMPUTED DATA ---
-            const openTasksCount = taskList.filter(i => i.status === 'Open').length;
-            const reviewExpensesCount = expenses.filter(e => e.status === 'Review').length;
-
+            // --- COMPUTED TREND DATA ---
             const trendData = useMemo(() => {
                 const data = [];
                 const today = new Date();
@@ -497,46 +546,6 @@
                 );
             };
 
-            const renderTasks = () => {
-                const openItems = taskList.filter(i => i.status === 'Open');
-                const doneItems = taskList.filter(i => i.status === 'Done');
-
-                return (
-                    <div className="fade-in space-y-4 pb-20">
-                        {successMsg && <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded-xl text-sm font-bold text-center animate-fade-in-down">{successMsg}</div>}
-                        <h2 className="text-xl font-bold text-gray-100 mb-4">Task List</h2>
-                        <form onSubmit={handleTaskSubmit} className="mb-6 relative">
-                            <input ref={taskInputRef} type="text" className="w-full p-4 pr-12 bg-gray-800 border border-gray-700 text-white placeholder-gray-400 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" placeholder="Add task..." value={taskInput} onChange={e => setTaskInput(e.target.value)} />
-                            <button type="submit" className="absolute right-3 top-3 p-1 text-blue-400 bg-blue-500/20 rounded-full hover:bg-blue-500/30 transition"><i data-lucide="plus" size={24}></i></button>
-                        </form>
-                        <div className="space-y-2 mb-6">
-                            {openItems.length === 0 && <p className="text-center text-gray-500 py-4 italic">All tasks completed! 🎉</p>}
-                            {openItems.map((item, idx) => (
-                                <div key={idx} onClick={() => toggleTaskItem(item)} className="flex items-center p-3 bg-gray-800 border border-gray-700 rounded-lg shadow-sm cursor-pointer hover:bg-gray-700 transition select-none group">
-                                    <div className="w-5 h-5 rounded border-2 border-gray-500 mr-3 group-hover:border-blue-400 flex-shrink-0"></div>
-                                    <span className="text-gray-200 font-medium break-words">{item.item}</span>
-                                </div>
-                            ))}
-                        </div>
-                        {doneItems.length > 0 && (
-                            <div className="border-t border-gray-700 pt-4">
-                                <button onClick={() => setIsTasksExpanded(!isTasksExpanded)} className="flex items-center text-gray-400 text-sm font-bold mb-3 hover:text-gray-300 transition"><i data-lucide={isTasksExpanded ? "chevron-down" : "chevron-right"} size={16} className="mr-1"></i> Completed ({doneItems.length})</button>
-                                {isTasksExpanded && (
-                                    <div className="space-y-2 fade-in">
-                                        {doneItems.map((item, idx) => (
-                                            <div key={idx} onClick={() => toggleTaskItem(item)} className="flex items-center p-2 opacity-60 cursor-pointer hover:opacity-100 transition">
-                                                <div className="w-5 h-5 rounded bg-green-900/30 border border-green-700 mr-3 flex items-center justify-center text-green-400 flex-shrink-0"><i data-lucide="check" size={12}></i></div>
-                                                <span className="text-gray-400 line-through decoration-gray-500 break-words">{item.item}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                );
-            };
-
             const renderFinances = () => {
                 const currentMonth = dashboardDate.getMonth();
                 const currentYear = dashboardDate.getFullYear();
@@ -568,7 +577,6 @@
                             <input type="month" value={`${dashboardDate.getFullYear()}-${String(dashboardDate.getMonth() + 1).padStart(2, '0')}`} onChange={e => { if(e.target.value) { const [y,m] = e.target.value.split('-'); setDashboardDate(new Date(parseInt(y), parseInt(m)-1, 1)); }}} className="bg-gray-800 border border-gray-700 text-white text-sm font-bold rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm" />
                         </div>
                         
-                        {/* Compact 6-Month Trend Graph (Income vs Expense) */}
                         <div className="bg-gray-800/80 p-3 rounded-xl border border-gray-700/50 shadow-sm flex flex-col justify-between h-28">
                             <div className="flex justify-between items-center mb-2 px-1 text-[10px] text-gray-400 font-semibold tracking-wider uppercase">
                                 <span>6-Month Trend</span>
@@ -580,11 +588,9 @@
                                     return (
                                     <div key={i} onClick={() => setDashboardDate(d.dateObj)} className={`flex flex-col items-center flex-1 h-full justify-end group cursor-pointer transition-all ${isActive ? 'opacity-100 scale-105' : 'opacity-60 hover:opacity-100'}`}>
                                         <div className="flex items-end h-full w-full gap-0.5 justify-center">
-                                            {/* Income Bar */}
                                             <div className={`w-1/2 rounded-t-sm relative overflow-hidden h-full flex items-end transition-colors ${isActive ? 'bg-green-500/20' : 'bg-green-500/10'}`} title={`Income: ₹${d.inc}`}>
                                                 <div className={`w-full transition-all duration-500 ease-out rounded-t-sm ${isActive ? 'bg-green-400' : 'bg-green-500'}`} style={{height: `${Math.max(d.incPct, 5)}%`}}></div>
                                             </div>
-                                            {/* Expense Bar */}
                                             <div className={`w-1/2 rounded-t-sm relative overflow-hidden h-full flex items-end transition-colors ${isActive ? 'bg-red-500/20' : 'bg-red-500/10'}`} title={`Spent: ₹${d.exp}`}>
                                                 <div className={`w-full transition-all duration-500 ease-out rounded-t-sm ${isActive ? 'bg-red-400' : 'bg-red-500'}`} style={{height: `${Math.max(d.expPct, 5)}%`}}></div>
                                             </div>
@@ -595,7 +601,6 @@
                             </div>
                         </div>
 
-                        {/* Review Logic */}
                         {reviews.length > 0 && (
                             <div className="bg-yellow-900/10 border border-yellow-700/30 rounded-xl p-3">
                                 <div className="flex justify-between items-center mb-3">
@@ -649,18 +654,17 @@
                                 <div className="text-2xl font-bold text-white">₹{(totalIncome - totalSpent).toLocaleString()}</div>
                             </div>
                             <button onClick={() => { 
-                                setFormData({ type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: 'Uncategorized', tag: '', notes: '' }); 
+                                setSharedFormData({ type: 'General', name: '', action: 'Expense', amount: '', date: new Date().toISOString().split('T')[0], category: 'Uncategorized', tag: '', notes: '' }); 
                                 setView('add_transaction'); 
-                                setSuccessMsg(''); 
                             }} className="w-full bg-blue-500/20 hover:bg-blue-500/40 border border-blue-500/50 text-blue-100 py-2.5 rounded-lg text-sm font-bold transition flex justify-center items-center gap-2"><i data-lucide="plus" size={16}></i> Log Cashflow Entry</button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mt-4 mb-2">
-                            <button onClick={() => { setView('budgets'); setSuccessMsg(''); }} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-colors text-sm font-medium text-gray-200 group">
+                            <button onClick={() => setView('budgets')} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-colors text-sm font-medium text-gray-200 group">
                                 <i data-lucide="pie-chart" size={16} className="text-blue-400 group-hover:scale-110 transition-transform"></i>
                                 Budgets
                             </button>
-                            <button onClick={() => { setView('cashflow_history'); setSuccessMsg(''); }} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-colors text-sm font-medium text-gray-200 group">
+                            <button onClick={() => setView('cashflow_history')} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 p-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-colors text-sm font-medium text-gray-200 group">
                                 <i data-lucide="history" size={16} className="text-blue-400 group-hover:scale-110 transition-transform"></i>
                                 History
                             </button>
@@ -924,8 +928,8 @@
                                             <div className="px-5 pb-5 pt-0 border-t border-gray-700 animate-fade-in-down">
                                                 <div className="h-4"></div>
                                                 <div className="flex gap-2 mb-4">
-                                                     <button onClick={(e) => { e.stopPropagation(); setFormData({ type: h.type, name: h.name, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '', date: new Date().toISOString().split('T')[0], category: '', tag: '', notes: '' }); setView('add_transaction'); setSuccessMsg(''); }} className="flex-1 py-3 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-500 shadow-sm transition">Pay</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); setFormData({ type: h.type, name: h.name, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '', date: new Date().toISOString().split('T')[0], category: '', tag: '', notes: '' }); setView('add_transaction'); setSuccessMsg(''); }} className="flex-1 py-3 bg-gray-700 text-gray-200 text-xs font-bold rounded-lg hover:bg-gray-600 transition shadow-sm border border-gray-600">{h.type === 'Monthly' ? 'Add Due' : 'Log Work'}</button>
+                                                     <button onClick={(e) => { e.stopPropagation(); setSharedFormData({ type: h.type, name: h.name, action: h.type === 'Monthly' ? 'Payment/Advance' : 'Payment', amount: h.amount || '', date: new Date().toISOString().split('T')[0], category: '', tag: '', notes: '' }); setView('add_transaction'); }} className="flex-1 py-3 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-500 shadow-sm transition">Pay</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setSharedFormData({ type: h.type, name: h.name, action: h.type === 'Monthly' ? 'Salary Due' : 'Work Logged', amount: h.amount || '', date: new Date().toISOString().split('T')[0], category: '', tag: '', notes: '' }); setView('add_transaction'); }} className="flex-1 py-3 bg-gray-700 text-gray-200 text-xs font-bold rounded-lg hover:bg-gray-600 transition shadow-sm border border-gray-600">{h.type === 'Monthly' ? 'Add Due' : 'Log Work'}</button>
                                                 </div>
                                                 {h.thisMonthTx && h.thisMonthTx.length > 0 && (
                                                     <div className="mb-3 bg-gray-900 rounded-lg p-2 border border-gray-700 shadow-inner">
@@ -976,59 +980,6 @@
                 );
             };
 
-            const renderTransactionForm = () => (
-                <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
-                    <div className="flex items-center mb-6"><button onClick={() => { setView(formData.type === 'General' ? 'expenses' : 'househelp'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Log Transaction</h2></div>
-                    <form className="space-y-4">
-                        
-                        {formData.type === 'General' && (
-                            <div className="flex gap-2 bg-gray-900 p-1.5 rounded-lg mb-4 border border-gray-700">
-                                <button type="button" className={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData.action === 'Expense' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setFormData({...formData, action: 'Expense'})}>Expense</button>
-                                <button type="button" className={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData.action === 'Income' ? 'bg-green-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setFormData({...formData, action: 'Income'})}>Income</button>
-                            </div>
-                        )}
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">{formData.action === 'Income' ? 'Source of Income' : 'Merchant / Helper'}</label>
-                            <input type="text" list="helper-options" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name} onChange={handleNameChange} placeholder={formData.action === 'Income' ? 'e.g. Client Name...' : 'Select Helper or type Merchant...'} autoFocus />
-                            <datalist id="helper-options">{helpers.map((h, i) => <option key={i} value={h.name} />)}</datalist>
-                        </div>
-                        
-                        {formData.type !== 'General' && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Action</label>
-                                <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.action} onChange={e => setFormData({...formData, action: e.target.value})}>
-                                    {formData.type === 'Monthly' ? (<><option value="Payment/Advance">Payment / Advance</option><option value="Salary Due">Salary Due</option></>) : (<><option value="Work Logged">Log Work Week</option><option value="Payment">Payment</option></>)}
-                                </select>
-                            </div>
-                        )}
-
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
-                        
-                        {/* Only show Category and Tag for General Entries, NOT for Househelp */}
-                        {formData.type === 'General' && (
-                            <>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
-                                    <select className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
-                                        <option value="Uncategorized">Uncategorized</option>
-                                        {budgets.map(b => <option key={b.category} value={b.category}>{b.category}</option>)}
-                                    </select>
-                                </div>
-                                <div><label className="block text-sm font-medium text-gray-300 mb-1">Tag</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.tag} onChange={e => setFormData({...formData, tag: e.target.value})} placeholder="e.g. project name" /></div>
-                            </>
-                        )}
-
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Date</label><input type="date" className="w-full p-3 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
-                        <div><label className="block text-sm font-medium text-gray-300 mb-1">Notes</label><input type="text" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Optional" /></div>
-                        <div className="flex gap-3 pt-2">
-                            <button type="button" onClick={() => handleTransactionAction(false)} disabled={loading} className="w-1/2 py-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-xl font-bold hover:bg-gray-600 transition shadow-sm">{loading ? 'Saving...' : 'Save'}</button>
-                            <button type="button" onClick={() => handleTransactionAction(true)} disabled={loading} className="w-1/2 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition shadow-lg">{loading ? 'Saving...' : 'Save & Home'}</button>
-                        </div>
-                    </form>
-                </div>
-            );
-
             const renderHelpersManager = () => (
                 <div className="bg-gray-800 p-6 rounded-xl shadow-md border border-gray-700 fade-in pb-20">
                     <div className="flex items-center mb-6"><button onClick={() => { setView('househelp'); setSuccessMsg(''); }} className="mr-3 text-gray-400 hover:text-blue-400"><i data-lucide="arrow-left"></i></button><h2 className="text-xl font-bold text-gray-100">Manage Helpers</h2></div>
@@ -1039,7 +990,7 @@
                             <input type="number" placeholder="Current Salary" className="w-1/2 p-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded outline-none focus:ring-2 focus:ring-purple-500" value={helperForm.defaultAmount} onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})} />
                         </div>
                         <p className="text-[10px] text-gray-300 bg-purple-900/30 p-2 rounded border border-purple-800"><i className="inline-block mr-1">ℹ️</i> Updating affects <strong>new</strong> records only.</p>
-                        <button type="submit" disabled={loading} className="w-full bg-purple-600 text-white p-2 rounded font-medium hover:bg-purple-500">{helpers.find(h => h.name === helperForm.name) ? 'Update Helper' : 'Save New Helper'}</button>
+                        <button type="submit" className="w-full bg-purple-600 text-white p-2 rounded font-medium hover:bg-purple-500">{helpers.find(h => h.name === helperForm.name) ? 'Update Helper' : 'Save New Helper'}</button>
                         {successMsg && <div className="mt-2 text-green-400 text-sm font-bold text-center bg-green-900/30 border border-green-800 p-2 rounded">{successMsg}</div>}
                     </form>
                     <div className="space-y-2">{helpers.map((h, i) => (<div key={i} className="flex justify-between items-center bg-gray-800 border border-gray-700 p-3 rounded shadow-sm"><div><div className="font-bold text-gray-100">{h.name}</div><div className="text-xs text-gray-400">{h.type} • {h.amount || 0}</div></div><button onClick={() => setHelperForm({name: h.name, type: h.type, defaultAmount: h.amount})} className="text-purple-400 hover:text-purple-300 text-xs">Edit</button></div>))}</div>
@@ -1098,7 +1049,7 @@
             };
 
             // --- MAIN RETURN ---
-            if (loading && !transactions.length && !helpers.length) return <div className="min-h-screen flex items-center justify-center"><div className="spinner"></div></div>;
+            if (loading && !transactions.length && !helpers.length && !isFreezing) return <div className="min-h-screen flex items-center justify-center"><div className="spinner"></div></div>;
             if (!isAuthenticated) return <LoginScreen onUnlock={handleUnlock} />;
 
             const isRootView = view === 'expenses' || view === 'tasks' || view === 'househelp';
@@ -1109,15 +1060,15 @@
                         <div className="text-xl font-bold text-gray-100 flex items-center gap-2 cursor-pointer select-none" onClick={() => { setView('expenses'); setSuccessMsg(''); }}>
                             <i data-lucide="home" className="text-blue-500"></i> HouseOS
                         </div>
-                        <button onClick={() => fetchData(false)} disabled={loading} className={`p-2 rounded-full bg-gray-900 border border-gray-700 text-gray-300 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700 active:scale-95'}`}>
-                            <i data-lucide="refresh-cw" size={18} className={loading ? 'animate-spin' : ''}></i>
+                        <button onClick={() => fetchData(false)} disabled={isFreezing} className={`p-2 rounded-full bg-gray-900 border border-gray-700 text-gray-300 transition-all ${isFreezing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700 active:scale-95'}`}>
+                            <i data-lucide="refresh-cw" size={18} className={isFreezing ? 'animate-spin text-blue-400' : ''}></i>
                         </button>
                     </header>
                     
                     <main className="flex-1 p-4 relative overflow-y-auto">
                         
                         {/* Enhancement 2: Synchronous DB Locking UI Overlay */}
-                        {loading && (transactions.length > 0 || helpers.length > 0) && (
+                        {isFreezing && (
                             <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center touch-none">
                                 <div className="bg-gray-900 border border-gray-700 p-6 rounded-2xl shadow-2xl flex flex-col items-center justify-center fade-in min-w-[140px]">
                                     <div className="spinner mb-4" style={{width: '30px', height: '30px', borderWidth: '4px'}}></div>
@@ -1129,10 +1080,12 @@
                         {view === 'expenses' && renderFinances()}
                         {view === 'budgets' && renderBudgets()}
                         {view === 'cashflow_history' && renderCashflowHistory()}
-                        {view === 'tasks' && renderTasks()}
+                        
+                        {view === 'tasks' && <TasksView taskList={taskList} submitData={submitData} successMsg={successMsg} />}
                         {view === 'househelp' && renderHousehelp()}
                         
-                        {view === 'add_transaction' && renderTransactionForm()}
+                        {view === 'add_transaction' && <TransactionFormView helpers={helpers} budgets={budgets} submitData={submitData} setView={setView} initialFormData={sharedFormData} successMsg={successMsg} />}
+                        
                         {view === 'helpers' && renderHelpersManager()}
                         {view === 'history' && renderHistory()}
                         {view === 'calculator' && <Calculator onBack={() => { setView('househelp'); setSuccessMsg(''); }} />}
