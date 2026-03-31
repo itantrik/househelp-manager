@@ -299,6 +299,7 @@
 
                         <div><label className="block text-sm font-medium text-gray-300 mb-1">Amount</label><input type="number" className="w-full p-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" /></div>
                         
+                        {/* Only show Category and Tag for General Entries, NOT for Househelp */}
                         {formData.type === 'General' && (
                             <>
                                 <div>
@@ -330,7 +331,7 @@
         function App() {
             const [view, setView] = useState('expenses'); 
             const [loading, setLoading] = useState(true);
-            const [isFreezing, setIsFreezing] = useState(false); // Controls the full screen overlay
+            const [isFreezing, setIsFreezing] = useState(false); 
             const [successMsg, setSuccessMsg] = useState('');
             
             const [transactions, setTransactions] = useState([]);
@@ -356,10 +357,14 @@
             
             const [budgetFormOpen, setBudgetFormOpen] = useState(false);
             const [budgetForm, setBudgetForm] = useState({ old_category: '', category: '', limit: '' });
-            const [sharedFormData, setSharedFormData] = useState(null); // Used to pass initial data to TransactionForm
+            const [sharedFormData, setSharedFormData] = useState(null); 
 
             const ITEMS_PER_PAGE = 20;
             const [dashboardDate, setDashboardDate] = useState(new Date());
+
+            // Computed Nav Badge Values
+            const openTasksCount = useMemo(() => taskList.filter(i => i.status === 'Open').length, [taskList]);
+            const reviewExpensesCount = useMemo(() => expenses.filter(e => e.status === 'Review').length, [expenses]);
 
             useEffect(() => { if (WEB_APP_URL) fetchData(false); }, []);
             useEffect(() => { lucide.createIcons(); }); 
@@ -432,9 +437,7 @@
                 if (!WEB_APP_URL) return false;
                 setSuccessMsg('');
                 
-                // Do not freeze for task toggles to keep UI snappy
                 const isSilentAction = payloadObj.method === 'add_shopping_item' || payloadObj.method === 'toggle_shopping_item';
-                
                 if (!isSilentAction) setIsFreezing(true); 
                 
                 try {
@@ -445,7 +448,6 @@
                         setSuccessMsg(payloadObj.method.includes('delete') ? "Deleted successfully! 🗑️" : "Saved successfully! ✅");
                     } 
                     
-                    // Fetch fresh data if needed, but we can do it silently in the background
                     if (!skipRefresh && !isSilentAction) {
                         await fetchData(true); 
                     }
@@ -464,7 +466,7 @@
                 if (!transactionToDelete) return;
                 const t = transactionToDelete;
                 setTransactionToDelete(null);
-                setTransactions(prev => prev.filter(tx => tx !== t)); // Optimistic UI
+                setTransactions(prev => prev.filter(tx => tx !== t)); 
                 await submitData({ method: 'delete_transaction', date: t.date, name: t.name, action: t.action, amount: t.amount });
             };
 
@@ -496,6 +498,28 @@
                 const ids = reviews.map(e => e.id).join(',');
                 await submitData({ method: 'bulk_confirm_expenses', ids: ids }, true);
                 setIsReviewModalOpen(false);
+            };
+
+            // --- BUDGET MANAGER HANDLERS ---
+            const handleSaveBudget = async () => {
+                if (!budgetForm.category || !budgetForm.limit) return;
+                const method = budgetForm.old_category ? 'update_budget' : 'add_budget';
+                
+                if (budgetForm.old_category) {
+                    setBudgets(prev => prev.map(b => b.category === budgetForm.old_category ? { category: budgetForm.category, limit: budgetForm.limit } : b));
+                } else {
+                    setBudgets(prev => [...prev, { category: budgetForm.category, limit: budgetForm.limit }]);
+                }
+
+                await submitData({ method, old_category: budgetForm.old_category, category: budgetForm.category, limit: budgetForm.limit }, true);
+                setBudgetFormOpen(false);
+            };
+
+            const handleDeleteBudget = async (category) => {
+                if(window.confirm(`Delete budget category: ${category}?`)) {
+                    setBudgets(prev => prev.filter(b => b.category !== category));
+                    await submitData({ method: 'delete_budget', category }, true);
+                }
             };
 
             // --- COMPUTED TREND DATA ---
@@ -990,7 +1014,7 @@
                             <input type="number" placeholder="Current Salary" className="w-1/2 p-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded outline-none focus:ring-2 focus:ring-purple-500" value={helperForm.defaultAmount} onChange={e => setHelperForm({...helperForm, defaultAmount: e.target.value})} />
                         </div>
                         <p className="text-[10px] text-gray-300 bg-purple-900/30 p-2 rounded border border-purple-800"><i className="inline-block mr-1">ℹ️</i> Updating affects <strong>new</strong> records only.</p>
-                        <button type="submit" className="w-full bg-purple-600 text-white p-2 rounded font-medium hover:bg-purple-500">{helpers.find(h => h.name === helperForm.name) ? 'Update Helper' : 'Save New Helper'}</button>
+                        <button type="submit" disabled={loading} className="w-full bg-purple-600 text-white p-2 rounded font-medium hover:bg-purple-500">{helpers.find(h => h.name === helperForm.name) ? 'Update Helper' : 'Save New Helper'}</button>
                         {successMsg && <div className="mt-2 text-green-400 text-sm font-bold text-center bg-green-900/30 border border-green-800 p-2 rounded">{successMsg}</div>}
                     </form>
                     <div className="space-y-2">{helpers.map((h, i) => (<div key={i} className="flex justify-between items-center bg-gray-800 border border-gray-700 p-3 rounded shadow-sm"><div><div className="font-bold text-gray-100">{h.name}</div><div className="text-xs text-gray-400">{h.type} • {h.amount || 0}</div></div><button onClick={() => setHelperForm({name: h.name, type: h.type, defaultAmount: h.amount})} className="text-purple-400 hover:text-purple-300 text-xs">Edit</button></div>))}</div>
@@ -1113,7 +1137,7 @@
                                                     <input type="number" className="bg-gray-900 text-sm text-white border border-gray-600 rounded p-2 w-24 text-right font-mono outline-none focus:border-yellow-500 transition" value={r.amount} onChange={e => handleUpdateReviewExpense(r.id, 'amount', e.target.value)} />
                                                 </div>
                                                 <div className="flex justify-between items-center gap-3">
-                                                    <select className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-2 flex-1 outline-none focus:border-yellow-500 transition" value={r.category} onChange={e => handleUpdateReviewExpense(r.id, 'category', e.target.value)}>
+                                                    <select className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-1.5 flex-1 outline-none focus:border-yellow-500 transition" value={r.category} onChange={e => handleUpdateReviewExpense(r.id, 'category', e.target.value)}>
                                                         <option value="Uncategorized">Select Category...</option>
                                                         {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
                                                     </select>
@@ -1170,7 +1194,7 @@
                             <div className="flex justify-around items-center p-2">
                                 <button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'expenses' || view === 'add_expense' ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}>
                                     <i data-lucide="wallet" size={24}></i>
-                                    {expenses.filter(e => e.status === 'Review').length > 0 && <span className="absolute top-1 right-1/4 translate-x-2 -translate-y-1 bg-yellow-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full border border-gray-800">{expenses.filter(e => e.status === 'Review').length}</span>}
+                                    {reviewExpensesCount > 0 && <span className="absolute top-1 right-1/4 translate-x-2 -translate-y-1 bg-yellow-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full border border-gray-800">{reviewExpensesCount}</span>}
                                     <span className="text-[10px] mt-1 font-medium">Cashflow</span>
                                 </button>
                                 <button onClick={() => { setView('tasks'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'tasks' ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}>
