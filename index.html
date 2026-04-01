@@ -362,9 +362,15 @@
             const ITEMS_PER_PAGE = 20;
             const [dashboardDate, setDashboardDate] = useState(new Date());
 
+            const [isRefreshing, setIsRefreshing] = useState(false);
+
             // Computed Nav Badge Values
             const openTasksCount = useMemo(() => taskList.filter(i => i.status === 'Open').length, [taskList]);
-            const reviewExpensesCount = useMemo(() => expenses.filter(e => e.status === 'Review').length, [expenses]);
+            const reviews = useMemo(() => [
+                ...expenses.filter(e => e.status === 'Review').map(e => ({...e, type: 'Expense', party: e.merchant})),
+                ...income.filter(i => i.status === 'Review').map(i => ({...i, type: 'Income', party: i.source}))
+            ], [expenses, income]);
+            const reviewCount = reviews.length;
 
             useEffect(() => { if (WEB_APP_URL) fetchData(false); }, []);
             useEffect(() => { lucide.createIcons(); }); 
@@ -424,6 +430,13 @@
                 } else { setIsAuthenticated(false); }
             };
 
+            const handleRefresh = async () => {
+                setIsRefreshing(true);
+                await fetchData(true);
+                setIsRefreshing(false);
+                if (window.lucide) setTimeout(() => window.lucide.createIcons(), 50);
+            };
+
             const handleUnlock = (inputPin) => {
                 if (inputPin === authPassword) {
                     localStorage.setItem('houseos_auth_session', JSON.stringify({ token: authPassword, timestamp: new Date().getTime() }));
@@ -470,13 +483,22 @@
                 await submitData({ method: 'delete_transaction', date: t.date, name: t.name, action: t.action, amount: t.amount });
             };
 
-            const handleUpdateReviewExpense = useCallback((id, field, value) => {
-                setExpenses(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e));
+            const handleUpdateReviewExpense = useCallback((id, field, value, type) => {
+                if (type === 'Income') {
+                    setIncome(prev => prev.map(i => i.id === id ? { ...i, [field === 'party' ? 'source' : field]: value } : i));
+                } else {
+                    setExpenses(prev => prev.map(e => e.id === id ? { ...e, [field === 'party' ? 'merchant' : field]: value } : e));
+                }
             }, []);
 
-            const confirmReviewExpense = async (expense) => {
-                setExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, status: 'Confirmed' } : e));
-                await submitData({ method: 'update_expense', id: expense.id, amount: expense.amount, merchant: expense.merchant, category: expense.category, status: 'Confirmed' }, true);
+            const confirmReviewExpense = async (item) => {
+                if (item.type === 'Income') {
+                    setIncome(prev => prev.map(i => i.id === item.id ? { ...i, status: 'Confirmed' } : i));
+                    await submitData({ method: 'update_income', id: item.id, amount: item.amount, source: item.party || item.source, category: item.category, status: 'Confirmed' }, true);
+                } else {
+                    setExpenses(prev => prev.map(e => e.id === item.id ? { ...e, status: 'Confirmed' } : e));
+                    await submitData({ method: 'update_expense', id: item.id, amount: item.amount, merchant: item.party || item.merchant, category: item.category, status: 'Confirmed' }, true);
+                }
             };
 
             const deleteCashflowItem = async (id, type) => {
@@ -492,10 +514,14 @@
             };
 
             const bulkConfirmExpenses = async () => {
-                const reviews = expenses.filter(e => e.status === 'Review');
-                if (reviews.length === 0) return;
+                const expenseReviews = expenses.filter(e => e.status === 'Review');
+                const incomeReviews = income.filter(i => i.status === 'Review');
+                if (expenseReviews.length === 0 && incomeReviews.length === 0) return;
+                
                 setExpenses(prev => prev.map(e => e.status === 'Review' ? { ...e, status: 'Confirmed' } : e));
-                const ids = reviews.map(e => e.id).join(',');
+                setIncome(prev => prev.map(i => i.status === 'Review' ? { ...i, status: 'Confirmed' } : i));
+                
+                const ids = [...expenseReviews.map(e => e.id), ...incomeReviews.map(i => i.id)].join(',');
                 await submitData({ method: 'bulk_confirm_expenses', ids: ids }, true);
                 setIsReviewModalOpen(false);
             };
@@ -586,8 +612,6 @@
                 });
                 const totalIncome = monthIncome.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0);
                 
-                const reviews = expenses.filter(e => e.status === 'Review');
-
                 const combinedRecent = [
                     ...monthExpenses.map(e => ({...e, type: 'Expense', party: e.merchant})),
                     ...monthIncome.map(i => ({...i, type: 'Income', party: i.source}))
@@ -639,16 +663,21 @@
                                         {reviews.map(r => (
                                             <div key={r.id} className="bg-gray-800 border border-gray-700 rounded-lg p-2.5 flex flex-col gap-2 shadow-sm">
                                                 <div className="flex justify-between items-center gap-2">
-                                                    <input type="text" className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-1.5 flex-1" value={r.merchant} onChange={e => handleUpdateReviewExpense(r.id, 'merchant', e.target.value)} />
-                                                    <input type="number" className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-1.5 w-24 text-right" value={r.amount} onChange={e => handleUpdateReviewExpense(r.id, 'amount', e.target.value)} />
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${r.type === 'Income' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>{r.type}</span>
+                                                    <input type="text" className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-1.5 flex-1" value={r.party} onChange={e => handleUpdateReviewExpense(r.id, 'party', e.target.value, r.type)} />
+                                                    <input type="number" className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-1.5 w-24 text-right" value={r.amount} onChange={e => handleUpdateReviewExpense(r.id, 'amount', e.target.value, r.type)} />
                                                 </div>
                                                 <div className="flex justify-between items-center gap-2">
-                                                    <select className="bg-gray-900 text-[10px] text-white border border-gray-600 rounded p-1.5 flex-1 outline-none" value={r.category} onChange={e => handleUpdateReviewExpense(r.id, 'category', e.target.value)}>
-                                                        <option value="Uncategorized">Select Category...</option>
-                                                        {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
-                                                    </select>
+                                                    {r.type === 'Expense' ? (
+                                                        <select className="bg-gray-900 text-[10px] text-white border border-gray-600 rounded p-1.5 flex-1 outline-none" value={r.category} onChange={e => handleUpdateReviewExpense(r.id, 'category', e.target.value, r.type)}>
+                                                            <option value="Uncategorized">Select Category...</option>
+                                                            {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
+                                                        </select>
+                                                    ) : (
+                                                        <div className="flex-1"></div>
+                                                    )}
                                                     <div className="flex gap-1.5">
-                                                        <button onClick={() => deleteCashflowItem(r.id, 'Expense')} className="px-2.5 py-1.5 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition"><i data-lucide="trash-2" size={14}></i></button>
+                                                        <button onClick={() => deleteCashflowItem(r.id, r.type)} className="px-2.5 py-1.5 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition"><i data-lucide="trash-2" size={14}></i></button>
                                                         <button onClick={() => confirmReviewExpense(r)} className="px-2.5 py-1.5 bg-green-600 text-white rounded hover:bg-green-500 transition"><i data-lucide="check" size={14}></i></button>
                                                     </div>
                                                 </div>
@@ -939,7 +968,13 @@
                                         <div className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-700 transition-colors" onClick={() => setExpandedHelpers(prev => ({...prev, [h.name]: !prev[h.name]}))}>
                                             <div className="flex items-start gap-3">
                                                  <div className={`mt-1 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}><i data-lucide="chevron-down" size={20}></i></div>
-                                                <div><h3 className="font-bold text-lg text-gray-100">{h.name}</h3><span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">{h.type}</span></div>
+                                                <div>
+                                                    <h3 className="font-bold text-lg text-gray-100">{h.name}</h3>
+                                                    <div className="flex gap-2 mt-1">
+                                                        <span className="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded">{h.type}</span>
+                                                        <span className="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded font-mono">₹{h.amount || 0} {h.type === 'Monthly' ? '/mo' : '/day'}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="text-right">
                                                 <div className={`text-xl font-bold ${h.overallBalance > 0 ? 'text-red-400' : 'text-green-400'}`}>
@@ -1084,8 +1119,8 @@
                         <div className="text-xl font-bold text-gray-100 flex items-center gap-2 cursor-pointer select-none" onClick={() => { setView('expenses'); setSuccessMsg(''); }}>
                             <i data-lucide="home" className="text-blue-500"></i> HouseOS
                         </div>
-                        <button onClick={() => fetchData(false)} disabled={isFreezing} className={`p-2 rounded-full bg-gray-900 border border-gray-700 text-gray-300 transition-all ${isFreezing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700 active:scale-95'}`}>
-                            <i data-lucide="refresh-cw" size={18} className={isFreezing ? 'animate-spin text-blue-400' : ''}></i>
+                        <button onClick={handleRefresh} disabled={isRefreshing || isFreezing} className={`p-2 rounded-full bg-gray-900 border border-gray-700 text-gray-300 transition-all ${(isRefreshing || isFreezing) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700 active:scale-95'}`}>
+                            <i data-lucide="refresh-cw" size={18} className={isRefreshing ? 'animate-spin text-blue-400' : ''}></i>
                         </button>
                     </header>
                     
@@ -1121,7 +1156,7 @@
                             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
                                 <div className="w-full max-w-md max-h-[85vh] bg-slate-900 rounded-2xl flex flex-col shadow-2xl border border-gray-700 overflow-hidden">
                                     <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-slate-950">
-                                        <h2 className="text-lg font-bold text-yellow-500">Review Manager ({expenses.filter(e => e.status === 'Review').length})</h2>
+                                        <h2 className="text-lg font-bold text-yellow-500">Review Manager ({reviews.length})</h2>
                                         <button onClick={() => setIsReviewModalOpen(false)} className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition"><i data-lucide="x" size={16}></i></button>
                                     </div>
                                     
@@ -1130,21 +1165,24 @@
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto mini-scroll space-y-3 p-4 bg-slate-900">
-                                        {expenses.filter(e => e.status === 'Review').map(r => (
+                                        {reviews.map(r => (
                                             <div key={r.id} className="bg-gray-800 border border-gray-700 p-4 rounded-xl space-y-3 shadow-sm">
                                                 <div className="flex justify-between items-center gap-3">
-                                                    <input type="text" className="bg-gray-900 text-sm text-white border border-gray-600 rounded p-2 flex-1 outline-none focus:border-yellow-500 transition" value={r.merchant} onChange={e => handleUpdateReviewExpense(r.id, 'merchant', e.target.value)} />
-                                                    <input type="number" className="bg-gray-900 text-sm text-white border border-gray-600 rounded p-2 w-24 text-right font-mono outline-none focus:border-yellow-500 transition" value={r.amount} onChange={e => handleUpdateReviewExpense(r.id, 'amount', e.target.value)} />
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${r.type === 'Income' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>{r.type}</span>
+                                                    <input type="text" className="bg-gray-900 text-sm text-white border border-gray-600 rounded p-2 flex-1 outline-none focus:border-yellow-500 transition" value={r.party} onChange={e => handleUpdateReviewExpense(r.id, 'party', e.target.value, r.type)} />
+                                                    <input type="number" className="bg-gray-900 text-sm text-white border border-gray-600 rounded p-2 w-24 text-right font-mono outline-none focus:border-yellow-500 transition" value={r.amount} onChange={e => handleUpdateReviewExpense(r.id, 'amount', e.target.value, r.type)} />
                                                 </div>
-                                                <div className="flex justify-between items-center gap-3">
-                                                    <select className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-1.5 flex-1 outline-none focus:border-yellow-500 transition" value={r.category} onChange={e => handleUpdateReviewExpense(r.id, 'category', e.target.value)}>
-                                                        <option value="Uncategorized">Select Category...</option>
-                                                        {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
-                                                    </select>
-                                                </div>
+                                                {r.type === 'Expense' && (
+                                                    <div className="flex justify-between items-center gap-3">
+                                                        <select className="bg-gray-900 text-xs text-white border border-gray-600 rounded p-1.5 flex-1 outline-none focus:border-yellow-500 transition" value={r.category} onChange={e => handleUpdateReviewExpense(r.id, 'category', e.target.value, r.type)}>
+                                                            <option value="Uncategorized">Select Category...</option>
+                                                            {budgets.map(b=><option key={b.category} value={b.category}>{b.category}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
                                                 <div className="flex gap-2 pt-2 border-t border-gray-700">
                                                     <button onClick={() => confirmReviewExpense(r)} className="flex-1 bg-green-600/20 text-green-400 py-2 rounded-lg text-xs font-bold uppercase border border-green-600/50 hover:bg-green-600 hover:text-white transition">Confirm</button>
-                                                    <button onClick={() => deleteCashflowItem(r.id, 'Expense')} className="flex-1 bg-red-900/20 text-red-400 py-2 rounded-lg text-xs font-bold uppercase border border-red-800/50 hover:bg-red-600 hover:text-white transition">Delete</button>
+                                                    <button onClick={() => deleteCashflowItem(r.id, r.type)} className="flex-1 bg-red-900/20 text-red-400 py-2 rounded-lg text-xs font-bold uppercase border border-red-800/50 hover:bg-red-600 hover:text-white transition">Delete</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1194,7 +1232,7 @@
                             <div className="flex justify-around items-center p-2">
                                 <button onClick={() => { setView('expenses'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'expenses' || view === 'add_expense' ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}>
                                     <i data-lucide="wallet" size={24}></i>
-                                    {reviewExpensesCount > 0 && <span className="absolute top-1 right-1/4 translate-x-2 -translate-y-1 bg-yellow-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full border border-gray-800">{reviewExpensesCount}</span>}
+                                    {reviewCount > 0 && <span className="absolute top-1 right-1/4 translate-x-2 -translate-y-1 bg-yellow-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full border border-gray-800">{reviewCount}</span>}
                                     <span className="text-[10px] mt-1 font-medium">Cashflow</span>
                                 </button>
                                 <button onClick={() => { setView('tasks'); setSuccessMsg(''); }} className={`flex flex-col items-center p-2 flex-1 relative transition-colors ${view === 'tasks' ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}>
